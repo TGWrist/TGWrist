@@ -1,20 +1,15 @@
 <a href="https://github.com/TGWrist/TGWrist">
-<img src="https://socialify.git.ci/TGWrist/TGWrist/image?description=1&descriptionEditable=Wear%20OS%20%E5%90%91%E3%81%91%E3%81%AE%E3%82%B9%E3%83%A0%E3%83%BC%E3%82%BA%E3%81%A7%E6%B4%97%E7%B7%B4%E3%81%95%E3%82%8C%E3%81%9F%E3%82%AA%E3%83%BC%E3%83%97%E3%83%B3%E3%82%BD%E3%83%BC%E3%82%B9%E3%81%AE%E3%82%B5%E3%83%BC%E3%83%89%E3%83%91%E3%83%BC%E3%83%86%E3%82%A3%20Telegram%20%E3%82%AF%E3%83%A9%E3%82%A4%E3%82%A2%E3%83%B3%E3%83%88%E3%80%82&font=KoHo&forks=1&issues=1&logo=https://github.com/TGWrist/TGWrist/blob/master/TGWrist.png?raw=true&name=1&owner=1&pattern=Circuit%20Board&pulls=1&stargazers=1&theme=Auto" alt="TGWrist" />
+<img src="https://socialify.git.ci/TGWrist/TGWrist/image?description=1&descriptionEditable=Wear%20OS%20%E5%90%91%E3%81%91%E3%81%AE%E3%82%B9%E3%83%A0%E3%83%BC%E3%82%BA%E3%81%A7%E6%B4%97%E7%B7%B4%E3%81%95%E3%82%8C%E3%81%9F%E3%80%81%E3%82%BD%E3%83%BC%E3%82%B9%E3%82%B3%E3%83%BC%E3%83%89%E5%85%AC%E9%96%8B%E3%81%AE%E3%82%B5%E3%83%BC%E3%83%89%E3%83%91%E3%83%BC%E3%83%86%E3%82%A3%20Telegram%20%E3%82%AF%E3%83%A9%E3%82%A4%E3%82%A2%E3%83%B3%E3%83%88%E3%80%82&font=KoHo&forks=1&issues=1&logo=https%3A%2F%2Fraw.githubusercontent.com%2FTGWrist%2FTGWrist%2Fmaster%2FTGWrist.png&name=1&owner=1&pattern=Circuit%20Board&pulls=1&stargazers=1&theme=Auto" alt="TGWrist" />
 </a>
 
 <div align="center">
   <br/>
   <div>
-      <a href="./README.md">English</a> | <a href="./README.zh-CN.md">简体中文</a> | <a href="./README.zh-TW.md">繁體中文</a> | 日本語
+      <a href="./README.md">English</a> | <a href="./README.zh-CN.md">简体中文</a> | <a href="./README.zh-TW.md">繁體中文</a> | 日本語 | <a href="./README.ru-RU.md">Русский</a>
   </div>
   <br/>
 
 <div>
-    <a href="https://github.com/TGWrist/TGWrist/blob/master/LICENSE">
-      <img
-        src="https://img.shields.io/github/license/TGWrist/TGWrist?style=flat-square"
-      />
-    </a >
     <a href="https://github.com/TGWrist/TGWrist/releases">
       <img
         src="https://img.shields.io/github/downloads/TGWrist/TGWrist/total?style=flat-square"
@@ -22,7 +17,7 @@
     </a >
     <a href="https://github.com/MShawon/github-clone-count-badge">
       <img
-        src="https://img.shields.io/badge/dynamic/json?color=success&label=Views&query=count&url=https://gist.githubusercontent.com/gohj99/cd38c559b315d503db0d9d4eed290eb3/raw/traffic.json&logo=github&style=flat-square"
+        src="https://img.shields.io/badge/dynamic/json?color=success&label=Views&query=count&url=https://gist.githubusercontent.com/gohj99/323da380ac4f041b13845b74e058ab33/raw/traffic.json&logo=github&style=flat-square"
       />  
     </a >
     <a href="https://play.google.com/store/apps/details?id=com.tgwrist.app">

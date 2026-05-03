@@ -1,20 +1,15 @@
 <a href="https://github.com/TGWrist/TGWrist">
-<img src="https://socialify.git.ci/TGWrist/TGWrist/image?description=1&descriptionEditable=%E4%B8%80%E5%80%8B%E6%B5%81%E6%9A%A2%E3%80%81%E7%B2%BE%E7%B7%BB%E3%80%81%E9%96%8B%E6%BA%90%E7%9A%84%20Wear%20OS%20%E7%AC%AC%E4%B8%89%E6%96%B9%20Telegram%20%E7%94%A8%E6%88%B6%E7%AB%AF%E3%80%82&font=KoHo&forks=1&issues=1&logo=https://github.com/TGWrist/TGWrist/blob/master/TGWrist.png?raw=true&name=1&owner=1&pattern=Circuit%20Board&pulls=1&stargazers=1&theme=Auto" alt="TGWrist" />
+<img src="https://socialify.git.ci/TGWrist/TGWrist/image?description=1&descriptionEditable=%E4%B8%80%E5%80%8B%E6%B5%81%E6%9A%A2%E3%80%81%E7%B2%BE%E7%B7%BB%E3%80%81%E9%96%8B%E6%94%BE%E5%8E%9F%E5%A7%8B%E7%A2%BC%E7%9A%84%20Wear%20OS%20%E7%AC%AC%E4%B8%89%E6%96%B9%20Telegram%20%E7%94%A8%E6%88%B6%E7%AB%AF%E3%80%82&font=KoHo&forks=1&issues=1&logo=https%3A%2F%2Fraw.githubusercontent.com%2FTGWrist%2FTGWrist%2Fmaster%2FTGWrist.png&name=1&owner=1&pattern=Circuit%20Board&pulls=1&stargazers=1&theme=Auto" alt="TGWrist" />
 </a>
 
 <div align="center">
   <br/>
   <div>
-      <a href="./README.md">English</a> | <a href="./README.zh-CN.md">简体中文</a> | 繁體中文 | <a href="./README.ja-JP.md">日本語</a>
+      <a href="./README.md">English</a> | <a href="./README.zh-CN.md">简体中文</a> | 繁體中文 | <a href="./README.ja-JP.md">日本語</a> | <a href="./README.ru-RU.md">Русский</a>
   </div>
   <br/>
 
 <div>
-    <a href="https://github.com/TGWrist/TGWrist/blob/master/LICENSE">
-      <img
-        src="https://img.shields.io/github/license/TGWrist/TGWrist?style=flat-square"
-      />
-    </a >
     <a href="https://github.com/TGWrist/TGWrist/releases">
       <img
         src="https://img.shields.io/github/downloads/TGWrist/TGWrist/total?style=flat-square"
@@ -22,7 +17,7 @@
     </a >
     <a href="https://github.com/MShawon/github-clone-count-badge">
       <img
-        src="https://img.shields.io/badge/dynamic/json?color=success&label=Views&query=count&url=https://gist.githubusercontent.com/gohj99/cd38c559b315d503db0d9d4eed290eb3/raw/traffic.json&logo=github&style=flat-square"
+        src="https://img.shields.io/badge/dynamic/json?color=success&label=Views&query=count&url=https://gist.githubusercontent.com/gohj99/323da380ac4f041b13845b74e058ab33/raw/traffic.json&logo=github&style=flat-square"
       />  
     </a >
     <a href="https://play.google.com/store/apps/details?id=com.tgwrist.app">
