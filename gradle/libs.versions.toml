@@ -1,0 +1,84 @@
+[versions]
+accompanistDrawablepainter = "0.37.3"
+agp = "9.2.0"
+firebaseBom = "34.12.0"
+iconsMaterialIcons = "2.2.1"
+kotlinxSerializationJson = "1.11.0"
+playServicesWearable = "20.0.1"
+kotlin = "2.3.21"
+composeBom = "2026.04.01"
+composeMaterial3 = "1.6.1"
+securityCrypto = "1.1.0"
+wearToolingPreview = "1.0.0"
+coreSplashscreen = "1.2.0"
+tiles = "1.6.0"
+tilesRenderer = "1.6.0"
+protolayout = "1.4.0"
+protolayoutMaterial3 = "1.4.0"
+guava = "33.6.0-android"
+tilesTooling = "1.6.0"
+tilesToolingPreview = "1.6.0"
+watchfaceComplicationsDataSourceKtx = "1.3.0"
+gson = "2.14.0"
+annotation = "1.10.0"
+coil-compose = "2.7.0"
+horologist = "0.7.15"
+wearRemoteInteractions = "1.2.0"
+media3 = "1.10.0"
+workRuntimeKtx = "2.11.2"
+zoomimageComposeCoil2 = "1.4.0"
+
+[libraries]
+accompanist-drawablepainter = { module = "com.google.accompanist:accompanist-drawablepainter", version.ref = "accompanistDrawablepainter" }
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
+firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
+firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
+firebase-perf = { module = "com.google.firebase:firebase-perf" }
+icons-material-icons-filled-android = { module = "com.composables:icons-material-icons-filled-android", version.ref = "iconsMaterialIcons" }
+icons-material-icons-outlined-android = { module = "com.composables:icons-material-icons-outlined-android", version.ref = "iconsMaterialIcons" }
+icons-material-icons-rounded-android = { module = "com.composables:icons-material-icons-rounded-android", version.ref = "iconsMaterialIcons" }
+icons-material-icons-sharp-android = { module = "com.composables:icons-material-icons-sharp-android", version.ref = "iconsMaterialIcons" }
+icons-material-icons-twotone-android = { module = "com.composables:icons-material-icons-twotone-android", version.ref = "iconsMaterialIcons" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+ui = { group = "androidx.compose.ui", name = "ui" }
+ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "composeMaterial3" }
+material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "composeMaterial3" }
+compose-ui-tooling = { group = "androidx.wear.compose", name = "compose-ui-tooling", version.ref = "composeMaterial3" }
+wear-tooling-preview = { group = "androidx.wear", name = "wear-tooling-preview", version.ref = "wearToolingPreview" }
+activity-compose = { group = "androidx.activity", name = "activity-compose" }
+core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
+tiles = { group = "androidx.wear.tiles", name = "tiles", version.ref = "tiles" }
+tiles-renderer = { group = "androidx.wear.tiles", name = "tiles-renderer", version.ref = "tilesRenderer" }
+protolayout = { group = "androidx.wear.protolayout", name = "protolayout", version.ref = "protolayout" }
+protolayout-material3 = { group = "androidx.wear.protolayout", name = "protolayout-material3", version.ref = "protolayoutMaterial3" }
+guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
+tiles-tooling = { group = "androidx.wear.tiles", name = "tiles-tooling", version.ref = "tilesTooling" }
+tiles-tooling-preview = { group = "androidx.wear.tiles", name = "tiles-tooling-preview", version.ref = "tilesToolingPreview" }
+watchface-complications-data-source-ktx = { group = "androidx.wear.watchface", name = "watchface-complications-data-source-ktx", version.ref = "watchfaceComplicationsDataSourceKtx" }
+compose-navigation = { group = "androidx.wear.compose", name = "compose-navigation", version.ref = "composeMaterial3" }
+gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
+androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "annotation" }
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil-compose" }
+horologist = { group = "com.google.android.horologist", name = "horologist-compose-layout", version.ref = "horologist" }
+androidx-wear-remote-interactions = { group = "androidx.wear", name = "wear-remote-interactions", version.ref = "wearRemoteInteractions" }
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
+androidx-media3-common-ktx = { group = "androidx.media3", name = "media3-common-ktx", version.ref = "media3" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
+zoomimage-compose-coil2 = { module = "io.github.panpf.zoomimage:zoomimage-compose-coil2", version.ref = "zoomimageComposeCoil2" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+android-library = { id = "com.android.library" }

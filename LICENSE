@@ -1,0 +1,35 @@
+TG Wrist Source-Available License
+
+Copyright (c) 2026 TG Wrist / gohj99. All rights reserved.
+
+This repository is made publicly available for transparency, security review,
+educational reference, and public code inspection only.
+
+You are permitted to:
+- View the source code.
+- Inspect the source code for security, privacy, or compatibility purposes.
+- Reference small portions of the code for discussion, review, or bug reporting.
+
+You are not permitted to:
+- Copy, reuse, modify, merge, publish, distribute, sublicense, or sell any part
+  of this software or its source code.
+- Use this software or its source code in another application, product, service,
+  commercial project, or open-source project.
+- Create derivative works based on this software or its source code.
+- Use the project name, branding, icons, UI assets, or other identifying
+  materials without explicit written permission.
+
+Contributions:
+By submitting an issue, pull request, patch, or other contribution to this
+repository, you agree that the project owner may use, modify, and distribute
+your contribution as part of this project without granting you any ownership
+rights over the project.
+
+No Warranty:
+This software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to warranties of merchantability, fitness for
+a particular purpose, and non-infringement.
+
+Permission Exceptions:
+Any use not explicitly permitted by this license requires prior written
+permission from the copyright holder.

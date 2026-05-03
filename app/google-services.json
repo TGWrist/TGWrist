@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "886140833567",
+    "project_id": "tg-wrist",
+    "storage_bucket": "tg-wrist.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:886140833567:android:7f8af42f59702b069a2a2a",
+        "android_client_info": {
+          "package_name": "com.tgwrist.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIZ1s_MypDiaYmSRQkwIg3hhT8l5QpE-Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
