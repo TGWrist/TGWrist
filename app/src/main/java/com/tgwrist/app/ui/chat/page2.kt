@@ -47,7 +47,7 @@ import com.tgwrist.app.R
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.main.ThumbnailChatPhoto
 import com.tgwrist.app.utils.LocalGlobalAppState
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.utils.dateTimeUserPref
 import com.tgwrist.app.utils.setClipboardText
 import kotlinx.coroutines.CoroutineScope
@@ -595,7 +595,8 @@ fun Page2(chatObject: TdApi.Chat?) {
             }
 
             // ---- 个人简介 / Bio（私人聊天） ----
-            val bioText = userFullInfo?.bio?.text
+            val bio = userFullInfo?.bio
+            val bioText = bio?.text
             if (!bioText.isNullOrBlank()) {
                 item {
                     TitleCard(
@@ -603,11 +604,9 @@ fun Page2(chatObject: TdApi.Chat?) {
                             Text(stringResource(id = R.string.Bio), fontSize = 12.sp, color = Color(0xFFC9C3CF))
                         },
                         onClick = {
-                            userFullInfo?.bio?.let {
-                                val textId = System.currentTimeMillis()
-                                appState.tgTextIdMap[textId] = it
-                                navController?.navigate(Destinations.textView(textId))
-                            }
+                            val textId = System.currentTimeMillis()
+                            appState.tgTextIdMap[textId] = bio
+                            navController?.navigate(Destinations.textView(textId))
                         },
                         onLongClick = {
                             context.setClipboardText(bioText, "Bio")

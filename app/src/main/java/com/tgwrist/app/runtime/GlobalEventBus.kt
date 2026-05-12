@@ -1,4 +1,4 @@
-package com.tgwrist.app.utils
+package com.tgwrist.app.runtime
 
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner

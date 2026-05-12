@@ -38,7 +38,7 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
 import com.tgwrist.app.ui.TextInputChip
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.TgClient
 import org.drinkless.tdlib.TdApi
 
 @Composable

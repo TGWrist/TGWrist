@@ -64,7 +64,7 @@ object MessageContentFactory {
                 renderer(content, messageRenderContext)
             } else {
                 // 未知消息类型
-                UnknownMessageRenderer(content)
+                UnknownMessageRenderer(content, messageRenderContext)
             }
         }
     }

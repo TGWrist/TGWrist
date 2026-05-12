@@ -5,14 +5,19 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.LifecycleObserver
 import com.tgwrist.app.notification.Push
-import com.tgwrist.app.utils.ChatMessagesRepository
-import com.tgwrist.app.utils.ChatsRepository
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.UserManager
+import com.tgwrist.app.runtime.ChatMessagesRepository
+import com.tgwrist.app.runtime.ChatsRepository
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.TgCallManager
+import com.tgwrist.app.runtime.UserManager
+import org.thunderdog.challegram.voip.VoIP
 
 class TGWrist : Application(), LifecycleObserver {
     // 伴生对象，相当于 Java 的 static
     companion object {
+        // application 变量用于保存 Application 实例，提供全局访问
+        private lateinit var application: Application
+        fun getApplication(): Application = application
         // 使用 late init 延迟初始化，确保不为空
         @SuppressLint("StaticFieldLeak")
         lateinit var context: Context
@@ -20,14 +25,29 @@ class TGWrist : Application(), LifecycleObserver {
     }
     override fun onCreate() {
         super.onCreate()
+        application = this
         // 在应用启动时，将 applicationContext 赋值给静态变量
         context = applicationContext
-        // 加载 tdlib 库
-        System.loadLibrary("tdjni")
         UserManager.init(this) // 初始化 UserManager
         ChatsRepository.init() // 初始化 ChatsRepository
         ChatMessagesRepository.init() // 初始化聊天消息仓库
         Config.init(this) // 初始化 Config
         Push.init() // 初始化消息通知全局单例
+        TgCallManager.init() // 初始化通话管理器
+
+        try {
+            VoIP.initialize(applicationContext)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }
+
+    init {
+        // 加载 c++ 库
+        System.loadLibrary("tdjni")
+        System.loadLibrary("tgcallsjni")
+        System.loadLibrary("leveldbjni")
+        System.loadLibrary("tgxjni")
+        System.loadLibrary("tgcallsjni") // 重复加载一次可能没必要，可以去掉
     }
 }

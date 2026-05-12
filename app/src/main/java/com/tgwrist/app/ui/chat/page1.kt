@@ -19,6 +19,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardReturn
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Call
+import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -46,7 +48,9 @@ import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.foundation.pager.PagerState
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonGroup
+import androidx.wear.compose.material3.FilledIconButton
 import androidx.wear.compose.material3.Icon
+import androidx.wear.compose.material3.IconButtonDefaults
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
@@ -55,7 +59,8 @@ import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.TgCallManager
+import com.tgwrist.app.runtime.TgClient
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 import kotlin.apply
@@ -228,6 +233,28 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, pagerState: PagerState) {
                     }
                 }
             }
+
+            item {
+                FilledIconButton(
+                    onClick = {
+                        TgCallManager.createCall(chatId)
+                    },
+                    modifier = Modifier.size(64.dp),
+                    shapes = IconButtonDefaults.shapes(
+                        shape = RoundedCornerShape(14.dp)
+                    ),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color(0xFF1D2B3A),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Call,
+                        contentDescription = "Call"
+                    )
+                }
+            }
+
             item {}
         }
     }

@@ -15,6 +15,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
@@ -23,6 +26,11 @@ import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavHostState
 import androidx.work.WorkManager
 import com.tgwrist.app.data.SharedMessageInfoKey
+import com.tgwrist.app.data.UserInfoEvent
+import com.tgwrist.app.runtime.ActiveUserSwitch
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.GlobalEventBus
+import com.tgwrist.app.runtime.OPEN_CALL_PAGE
 import com.tgwrist.app.ui.AboutScreen
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.IMGViewScreen
@@ -38,11 +46,15 @@ import com.tgwrist.app.ui.theme.TGWristTheme
 import com.tgwrist.app.utils.GlobalAppState
 import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.MainViewModel
-import com.tgwrist.app.utils.TdLibInitManage
-import com.tgwrist.app.utils.TgClient
-import com.tgwrist.app.utils.UserManager
+import com.tgwrist.app.runtime.TdLibInitManage
+import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.runtime.UserManager
+import com.tgwrist.app.ui.CallScreen
 import com.tgwrist.app.utils.WifiNetworkRequester
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import org.drinkless.tdlib.TdApi
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -56,6 +68,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        Config.isMainActivityAlive = false
         TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(false)))
         TgClient.close()
         if (::wifiRequester.isInitialized) {
@@ -95,6 +108,8 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
 
+        Config.isMainActivityAlive = true
+
         WorkManager.getInstance(this).cancelUniqueWork("notification_processing")
 
         // 获取WiFi权限
@@ -111,17 +126,11 @@ class MainActivity : ComponentActivity() {
         // 赋值传入的chatId
         pendingOpenChatId = intent?.getLongExtra("chatId", -1L) ?: -1L
 
-        // 初始化 TdLib 管理器
-        /*TdLibInitManage.init()
-
-        // 初始化 TDLib 客户端
-        TgClient.close()
-        TgClient.init()*/
-
         setContent {
             //val coroutineScope = rememberCoroutineScope()
             val navController = rememberSwipeDismissableNavController()
             val swipeState = rememberSwipeDismissableNavHostState()
+            val lifecycleOwner = LocalLifecycleOwner.current
 
             // 初始化“数据共享区域”
             val appState = remember { GlobalAppState() }
@@ -146,6 +155,31 @@ class MainActivity : ComponentActivity() {
                 TdLibInitManage.navigateEvent.collect { navigationAction ->
                     // 把前台安全的 navController 交给这个动作去执行
                     navigationAction(navController)
+                }
+            }
+
+            // tdlib 心跳
+            LaunchedEffect(lifecycleOwner) {
+                lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    while (isActive) {
+                        delay(10000.milliseconds)
+                        TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(true)))
+                    }
+                }
+            }
+
+            LaunchedEffect(Unit) {
+                GlobalEventBus.subscribe<String>(
+                    scope = this,
+                    lifecycleOwner = lifecycleOwner
+                ) { event ->
+                    // 处理打开通话页面事件
+                    if (event == OPEN_CALL_PAGE) {
+                        navController.navigate(Destinations.CALL) {
+                            // 如果目标页面已经在栈顶，则不会重新创建和打开新页面
+                            launchSingleTop = true
+                        }
+                    }
                 }
             }
 
@@ -258,6 +292,11 @@ class MainActivity : ComponentActivity() {
                                     return@composable
                                 }
                                 MessageInfo(chatId, sharedData.msgIdList)
+                            }
+
+                            // 通话页面
+                            composable(Destinations.CALL) {
+                                CallScreen()
                             }
 
                             // 测试页面

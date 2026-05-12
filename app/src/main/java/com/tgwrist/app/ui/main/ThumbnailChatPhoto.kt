@@ -17,8 +17,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.rememberAsyncImagePainter
-import com.tgwrist.app.utils.Config.accentColorList
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.Config.accentColorList
+import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.utils.generateChatTitleIconBitmap
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.drinkless.tdlib.TdApi

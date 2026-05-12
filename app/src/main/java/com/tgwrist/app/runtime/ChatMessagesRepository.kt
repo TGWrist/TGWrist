@@ -1,8 +1,9 @@
-package com.tgwrist.app.utils
+package com.tgwrist.app.runtime
 
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.tgwrist.app.utils.copy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

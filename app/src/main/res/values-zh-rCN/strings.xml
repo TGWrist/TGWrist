@@ -205,4 +205,12 @@
     <string name="Delete_for_everyone">为所有人删除</string>
     <string name="Delete_for_me_only">这将会为你删除这条消息</string>
     <string name="Delete_for_everyone_only">这将为所有人删除这条消息</string>
+    <string name="Calling">通话中</string>
+    <string name="Call_status_calling_you">正在呼叫你</string>
+    <string name="Call_status_requesting">请求中…</string>
+    <string name="Call_status_waiting">正在等待…</string>
+    <string name="Call_status_ringing">铃声</string>
+    <string name="Call_status_exchanging_keys">正在交换密钥…</string>
+    <string name="Tap_to_return_to_call">点按返回通话</string>
+    <string name="Need_mic_permission">需要麦克风接入</string>
 </resources>

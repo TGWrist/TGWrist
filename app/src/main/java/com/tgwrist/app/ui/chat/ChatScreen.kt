@@ -70,12 +70,12 @@ import com.tgwrist.app.data.SharedMessageInfoData
 import com.tgwrist.app.data.SharedMessageInfoKey
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.StatusTimeText
-import com.tgwrist.app.utils.ChatMessagesRepository
+import com.tgwrist.app.runtime.ChatMessagesRepository
 import com.tgwrist.app.utils.ChatScreenKey
 import com.tgwrist.app.utils.ChatScrollState
-import com.tgwrist.app.utils.ChatsRepository
+import com.tgwrist.app.runtime.ChatsRepository
 import com.tgwrist.app.utils.LocalGlobalAppState
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.utils.date
 import com.tgwrist.app.utils.isSameDay
 import com.tgwrist.app.utils.openChatOnPhone

@@ -60,8 +60,8 @@ import com.tgwrist.app.ui.message.info.DeleteMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
 import com.tgwrist.app.ui.message.info.TranslationButton
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.TgClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

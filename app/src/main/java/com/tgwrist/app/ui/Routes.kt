@@ -15,6 +15,7 @@ object Destinations {
     const val SETTINGS = "settings/{index}"
     const val ABOUT = "about"
     const val LOGIN = "login"
+    const val CALL = "call"
     const val IMG_VIEW = "IMGView/{path}"
     const val VIDEO_VIEW = "VideoView/{path}"
     const val TEXT_VIEW = "TextView?text={text}&textId={textId}"

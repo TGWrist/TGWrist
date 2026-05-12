@@ -36,6 +36,8 @@
 
 [在 Google Play 下載](https://play.google.com/store/apps/details?id=com.tgwrist.app)
 
+Google Play 會提供最適合你裝置的版本，通常下載體積也更小。它也能讓安裝和後續更新更輕鬆，無需手動使用 ADB 安裝。
+
 ### ADB 安裝
 
 > 不建議大多數使用者使用。  

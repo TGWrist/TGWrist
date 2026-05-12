@@ -21,7 +21,7 @@ import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
 import com.tgwrist.app.data.AlertDialogItem
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.utils.getUserTranslateLanguageCode
 import org.drinkless.tdlib.TdApi
 

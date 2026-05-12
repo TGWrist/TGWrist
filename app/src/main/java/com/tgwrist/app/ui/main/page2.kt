@@ -44,8 +44,8 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
 import com.tgwrist.app.ui.Destinations
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.Config.connectionState
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.Config.connectionState
 import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.setClipboardText
 

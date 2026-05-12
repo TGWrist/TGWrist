@@ -19,8 +19,8 @@ import androidx.core.graphics.drawable.IconCompat
 import com.tgwrist.app.MainActivity
 import com.tgwrist.app.R
 import com.tgwrist.app.TGWrist
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.utils.generateChatTitleIconBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -225,7 +225,24 @@ object Push {
             style.isGroupConversation = true
         }
 
-        val sorted = messages.sortedBy { it.timestamp }
+        val sorted = messages
+            .toList() // 先复制快照，避免后面被并发修改
+            .sortedBy { it.timestamp }
+
+        val lastMessage = sorted.lastOrNull()
+        if (lastMessage == null) {
+            nm.cancel(notifId)
+            chatMessages.remove(chatId)
+            chatMetas.remove(chatId)
+
+            if (chatMessages.isEmpty()) {
+                nm.cancel(SUMMARY_NOTIFICATION_ID)
+            } else {
+                rebuildSummary(context, nm)
+            }
+            return
+        }
+
         for (msg in sorted) {
             style.addMessage(
                 msg.text,
@@ -234,7 +251,7 @@ object Push {
             )
         }
 
-        val lastTimestamp = sorted.last().timestamp
+        val lastTimestamp = lastMessage.timestamp
         val allSilent = sorted.all { it.isSilent }
 
         // 构造 DeleteIntent (滑动清除时通知 TDLib 移除通知)

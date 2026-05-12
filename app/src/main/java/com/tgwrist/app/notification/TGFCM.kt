@@ -7,9 +7,9 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.TgClient
-import com.tgwrist.app.utils.UserManager
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.runtime.UserManager
 import org.drinkless.tdlib.TdApi
 import org.json.JSONObject
 

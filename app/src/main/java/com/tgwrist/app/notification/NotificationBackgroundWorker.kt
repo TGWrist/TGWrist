@@ -5,14 +5,16 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.tgwrist.app.TGWrist
-import com.tgwrist.app.utils.TgClient
-import com.tgwrist.app.utils.UserManager
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.runtime.UserManager
 import com.tgwrist.app.utils.setTdlibParameters
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.drinkless.tdlib.TdApi
 import java.io.IOException
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.milliseconds
 
 class NotificationBackgroundWorker(
     appContext: Context,
@@ -96,15 +98,15 @@ class NotificationBackgroundWorker(
             if (processResult is TdApi.Ok) {
                 Log.d(TAG, "Push notification processed successfully")
                 // 给 TDLib 一点时间分发 UpdateNotificationGroup 事件
-                delay(3000)
+                delay(3000.milliseconds)
                 Result.success()
             } else if (processResult is TdApi.Error) {
                 if (processResult.code == 406) {
-                    delay(20000) // 等待 20秒 给tdlib接收信息
+                    delay(20000.milliseconds) // 等待 20秒 给tdlib接收信息
                     Result.success()
                 } else {
                     // 可能是什么其他的问题，等待20秒关闭即可
-                    delay(20000)
+                    delay(20000.milliseconds)
                     Result.failure()
                 }
             } else {
@@ -318,8 +320,8 @@ class NotificationBackgroundWorker(
             block()
         } finally {
             try {
-                // FIX: 无论任何分支退出，都确保关闭 TgClient
-                TgClient.close()
+                // 关闭 TgClient
+                if (!Config.isMainActivityAlive) TgClient.close()
             } catch (closeError: Exception) {
                 // FIX: 防止 close 自己抛异常影响 Worker 最终结果
                 Log.e(TAG, "Failed to close TgClient", closeError)

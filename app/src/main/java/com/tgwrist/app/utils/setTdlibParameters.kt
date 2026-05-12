@@ -8,6 +8,7 @@ import android.util.Log
 import android.widget.Toast
 import com.tgwrist.app.BuildConfig
 import com.tgwrist.app.R
+import com.tgwrist.app.runtime.TgClient
 import org.drinkless.tdlib.TdApi
 import java.io.File
 

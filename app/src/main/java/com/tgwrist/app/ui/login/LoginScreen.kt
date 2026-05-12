@@ -32,11 +32,11 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
-import com.tgwrist.app.utils.TdLibInitManage
-import com.tgwrist.app.utils.TdLibInitManage.isPageOnLoginAndNeedReInitTG
-import com.tgwrist.app.utils.TdLibInitManage.needReInitOnDispose
-import com.tgwrist.app.utils.TgClient
-import com.tgwrist.app.utils.UserManager
+import com.tgwrist.app.runtime.TdLibInitManage
+import com.tgwrist.app.runtime.TdLibInitManage.isPageOnLoginAndNeedReInitTG
+import com.tgwrist.app.runtime.TdLibInitManage.needReInitOnDispose
+import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.runtime.UserManager
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 

@@ -33,7 +33,7 @@ import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.data.SettingItem
-import com.tgwrist.app.utils.Config
+import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.utils.LocalGlobalAppState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

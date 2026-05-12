@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.HistoryToggleOff
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.rounded.KeyboardDoubleArrowUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,14 +67,16 @@ import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
+import com.tgwrist.app.runtime.CALL_STATE_NONE
 import com.tgwrist.app.ui.Destinations
-import com.tgwrist.app.utils.ChatsRepository
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.GlobalEventBus
+import com.tgwrist.app.runtime.ChatsRepository
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.GlobalEventBus
 import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.MainViewModel
-import com.tgwrist.app.utils.SWITCHING_CHAT_LIST
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.SWITCHING_CHAT_LIST
+import com.tgwrist.app.runtime.TgCallManager
+import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.utils.formatChatTimestamp
 import com.tgwrist.app.utils.handleAllMessages
 import kotlinx.coroutines.delay
@@ -80,6 +84,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.drinkless.tdlib.TdApi
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 internal fun Page1(viewModel: MainViewModel = viewModel()) {
@@ -107,6 +112,8 @@ internal fun Page1(viewModel: MainViewModel = viewModel()) {
     // 第一次翻滚到最顶上
     val mainPage1FristScrollTop by viewModel.mainPage1FristScrollTop.collectAsStateWithLifecycle()
 
+    val isCalling by TgCallManager.callState.collectAsState()
+
     // 简单缓存，避免重复网络请求
     val nameCache = remember { mutableMapOf<Long, String>() }
     val chatTitleCache = remember { mutableMapOf<Long, String>() }
@@ -132,7 +139,7 @@ internal fun Page1(viewModel: MainViewModel = viewModel()) {
             // 标记已经执行过首次滚动
             viewModel.mainPage1FristScrollTop.value = true
             // 挂起等待 1 秒
-            delay(1000)
+            delay(1000.milliseconds)
             // 滚动
             listState.scrollToItem(index = 0)
         }
@@ -196,6 +203,53 @@ internal fun Page1(viewModel: MainViewModel = viewModel()) {
                         modifier = Modifier
                             .fillMaxWidth()
                     )
+                }
+            }
+
+            // 通话提示
+            if (isCalling != CALL_STATE_NONE) {
+                item(key = "calling") {
+                    AppCard(
+                        onClick = {
+                            navController?.navigate(Destinations.CALL)
+                        },
+                        appName = {
+                            Text(
+                                text = stringResource(R.string.Calling),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        },
+                        appImage = {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Call,
+                                    contentDescription = "Call",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        },
+                        title = {
+                            Text(
+                                text = stringResource(R.string.Tap_to_return_to_call),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        transformation = SurfaceTransformation(transformationSpec),
+                        modifier = Modifier.transformedHeight(this, transformationSpec)
+                    ) {}
                 }
             }
 

@@ -47,13 +47,14 @@ import com.tgwrist.app.TGWrist
 import com.tgwrist.app.data.UserInfo
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.utils.LocalGlobalAppState
-import com.tgwrist.app.utils.TdLibInitManage
-import com.tgwrist.app.utils.TgClient
-import com.tgwrist.app.utils.UserManager
+import com.tgwrist.app.runtime.TdLibInitManage
+import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.runtime.UserManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 internal fun Page3() {
@@ -208,7 +209,7 @@ fun ElegantRadioButtonItem(
                 is PressInteraction.Press -> {
                     isLongPress = false
                     pressJob = launch {
-                        delay(viewConfig.longPressTimeoutMillis)
+                        delay(viewConfig.longPressTimeoutMillis.milliseconds)
                         isLongPress = true
                         //println("触发长按事件")
                         onLongClick.invoke()

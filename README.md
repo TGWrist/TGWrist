@@ -36,6 +36,8 @@ We recommend downloading TG Wrist from Google Play:
 
 [Download on Google Play](https://play.google.com/store/apps/details?id=com.tgwrist.app)
 
+Google Play provides the version best suited for your device, usually with a smaller download size. It also makes installation and future updates easier, without requiring manual ADB installation.
+
 ### ADB Installation
 
 > Not recommended for most users.  

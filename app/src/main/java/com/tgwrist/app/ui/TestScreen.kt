@@ -1,5 +1,9 @@
 package com.tgwrist.app.ui
 
+import android.content.ActivityNotFoundException
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
@@ -9,9 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberOverscrollEffect
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.MicOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,16 +29,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.AppCard
 import androidx.wear.compose.material3.AppScaffold
+import androidx.wear.compose.material3.Button
+import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.CardDefaults
+import androidx.wear.compose.material3.ChildButton
+import androidx.wear.compose.material3.CompactButton
+import androidx.wear.compose.material3.FilledIconButton
 import androidx.wear.compose.material3.Icon
+import androidx.wear.compose.material3.IconButtonDefaults
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.TextButton
 import com.tgwrist.app.utils.LocalGlobalAppState
 
 @Composable
@@ -259,9 +274,106 @@ fun TestScreen() {
                 }
 
                 item {
+                    CompactButton(
+                        onClick = { /* Do something */ },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Favorite,
+                                contentDescription = "Favorite icon",
+                                modifier = Modifier.size(ButtonDefaults.ExtraSmallIconSize),
+                            )
+
+                        },
+                        modifier = Modifier,
+                    ) {
+                        Text("Compact Button", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+
+                item {
+                    ChildButton(
+                        onClick = { /* Do something */ },
+                        label = { Text("Child Button") },
+                        secondaryLabel = { Text("Secondary label") },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Favorite,
+                                contentDescription = "Favorite icon",
+                                modifier = Modifier.size(ButtonDefaults.ExtraSmallIconSize),
+                            )
+                        },
+                        modifier = Modifier,
+                    )
+                }
+
+                item {
+                    TextButton(
+                        onClick = { /* Do something for onClick*/ },
+                        onLongClick = { /* Do something for onLongClick*/ },
+                        onLongClickLabel = "Long click",
+                    ) {
+                        Text(text = "ABC")
+                    }
+                }
+
+                item {
+                    FilledIconButton(
+                        onClick = {
+
+                        },
+                        modifier = Modifier.size(64.dp),
+                        shapes = IconButtonDefaults.shapes(
+                            shape = RoundedCornerShape(14.dp)
+                        ),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color(0xFF1D2B3A),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MicOff,
+                            contentDescription = "MicOff"
+                        )
+                    }
+                }
+
+                item {
+                    ImagePickerScreen()
+                }
+
+                item {
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ImagePickerScreen() {
+    // 注册 Photo Picker 的 ActivityResultLauncher
+    val pickMedia = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            println("成功获取图片 URI: $uri")
+            // 在此处将 URI 转换为 Bitmap 或直接加载（例如使用 Coil）
+        } else {
+            println("用户未选择任何媒体")
+        }
+    }
+
+    Button(onClick = {
+        try {
+            // 启动选择器，并限制只选择图片
+            pickMedia.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        } catch (e: ActivityNotFoundException) {
+            // 必须进行异常捕获：处理部分 Wear OS 设备被阉割了文件系统的情况
+            println( "当前设备不支持图片选择: $e")
+        }
+    }) {
+        Text("选择相册图片")
     }
 }

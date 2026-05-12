@@ -66,9 +66,9 @@ import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
-import com.tgwrist.app.utils.ChatsRepository
-import com.tgwrist.app.utils.ChatsRepository.listKey
-import com.tgwrist.app.utils.Config
+import com.tgwrist.app.runtime.ChatsRepository
+import com.tgwrist.app.runtime.ChatsRepository.listKey
+import com.tgwrist.app.runtime.Config
 import org.drinkless.tdlib.TdApi
 
 /**

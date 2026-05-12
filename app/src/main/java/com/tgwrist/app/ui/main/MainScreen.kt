@@ -11,9 +11,9 @@ import androidx.wear.compose.material3.HorizontalPagerScaffold
 import androidx.wear.compose.material3.PagerScaffoldDefaults
 import com.tgwrist.app.data.UserInfoEvent
 import com.tgwrist.app.ui.StatusTimeText
-import com.tgwrist.app.utils.ActiveUserSwitch
-import com.tgwrist.app.utils.GlobalEventBus
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.ActiveUserSwitch
+import com.tgwrist.app.runtime.GlobalEventBus
+import com.tgwrist.app.runtime.TgClient
 
 const val MAIN_LIST = "MAIN"
 const val ARCHIVE_LIST = "ARCHIVE"

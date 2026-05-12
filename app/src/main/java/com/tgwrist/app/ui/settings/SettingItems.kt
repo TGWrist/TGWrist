@@ -35,9 +35,9 @@ import com.tgwrist.app.R
 import com.tgwrist.app.TGWrist
 import com.tgwrist.app.data.SettingItem
 import com.tgwrist.app.ui.Destinations
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.TgClient
-import com.tgwrist.app.utils.UserManager
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.runtime.UserManager
 import com.tgwrist.app.utils.openInBrowser
 import org.drinkless.tdlib.TdApi
 import java.io.File

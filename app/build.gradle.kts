@@ -21,8 +21,8 @@ android {
         applicationId = "com.tgwrist.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "3.1"
+        versionCode = 22
+        versionName = "3.3"
     }
 
     signingConfigs {
@@ -57,11 +57,30 @@ android {
         buildConfig = true
         compose = true
     }
+    sourceSets {
+        getByName("main") {
+            java.directories.add("jni/third_party/webrtc/rtc_base/java/src")
+            java.directories.add("jni/third_party/webrtc/modules/audio_device/android/java/src")
+            java.directories.add("jni/third_party/webrtc/sdk/android/api")
+            java.directories.add("jni/third_party/webrtc/sdk/android/src/java")
+            java.directories.add("thirdparty/WebRTC/src/java")
+
+            for (extension in arrayOf(
+                "decoder_ffmpeg",
+                "decoder_flac",
+                "decoder_opus",
+                "decoder_vp9"
+            )) {
+                java.directories.add("thirdparty/androidx-media/libraries/$extension/src/main/java")
+            }
+        }
+    }
 }
 
 dependencies {
     implementation(project(":tdlib"))
     implementation(platform(libs.firebase.bom))
+    implementation(libs.androidx.ui.text)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
@@ -102,7 +121,10 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    implementation(libs.androidx.graphics.shapes)
     implementation(libs.androidx.media3.common.ktx)
+    implementation(libs.relinker)
+    implementation(libs.checker.qual)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.ui.test.junit4)
     debugImplementation(libs.ui.tooling)

@@ -54,7 +54,7 @@ import com.tgwrist.app.R
 import com.tgwrist.app.TGWrist
 import com.tgwrist.app.ui.settings.disableNotification
 import com.tgwrist.app.ui.settings.registerFcmAndEnableNotification
-import com.tgwrist.app.utils.Config
+import com.tgwrist.app.runtime.Config
 
 @Composable
 fun Page0(nextPage: () -> Unit) {

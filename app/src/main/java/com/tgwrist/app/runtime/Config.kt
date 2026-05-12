@@ -1,17 +1,20 @@
-package com.tgwrist.app.utils
+package com.tgwrist.app.runtime
 
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import androidx.compose.ui.graphics.Color
+import androidx.core.content.edit
+import com.tgwrist.app.data.ChatFolderInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.drinkless.tdlib.TdApi
-import androidx.core.content.edit
-import com.tgwrist.app.utils.UserManager.updateUserName
-import com.tgwrist.app.data.ChatFolderInfo
 
 object Config {
+    // MainActivity 是否存在
+    @Volatile
+    var isMainActivityAlive: Boolean = false
+
     private const val PREF_NAME = "Config"
 
     // ConnectionState 状态码（给 Compose 订阅用）
@@ -64,15 +67,17 @@ object Config {
     private lateinit var prefs: SharedPreferences
 
     // 存储可用的 accent colors（只取 darkThemeColors）
-    private val _accentColorList = MutableStateFlow<Map<Int, Color>>( mutableMapOf(
-        0 to Color(0xFFD32F2F),
-        1 to Color(0xFFF89A46),
-        2 to Color(0xFF8B76E8),
-        3 to Color(0xFF6FC352),
-        4 to Color(0xFF52BEDE),
-        5 to Color(0xFF438ED3),
-        6 to Color(0xFFE76B8B)
-    ))
+    private val _accentColorList = MutableStateFlow<Map<Int, Color>>(
+        mutableMapOf(
+            0 to Color(0xFFD32F2F),
+            1 to Color(0xFFF89A46),
+            2 to Color(0xFF8B76E8),
+            3 to Color(0xFF6FC352),
+            4 to Color(0xFF52BEDE),
+            5 to Color(0xFF438ED3),
+            6 to Color(0xFFE76B8B)
+        )
+    )
     val accentColorList = _accentColorList.asStateFlow()
 
     // 当前连接状态（提供给 Compose 收集）
@@ -121,7 +126,10 @@ object Config {
                     if (it is TdApi.User) {
                         _currentUser.value = it
                         if (!it.firstName.isNullOrBlank()) {
-                            updateUserName(it.id, it.firstName + if (it.lastName.isNullOrBlank()) "" else " ${it.lastName}")
+                            UserManager.updateUserName(
+                                it.id,
+                                it.firstName + if (it.lastName.isNullOrBlank()) "" else " ${it.lastName}"
+                            )
                         }
 
                         TgClient.send(TdApi.GetUserFullInfo(it.id)) { userFullInfo ->
@@ -141,7 +149,10 @@ object Config {
                 _currentUser.value = update.user
 
                 if (!update.user.firstName.isNullOrBlank()) {
-                    updateUserName(update.user.id, update.user.firstName + if (update.user.lastName.isNullOrBlank()) "" else " ${update.user.lastName}")
+                    UserManager.updateUserName(
+                        update.user.id,
+                        update.user.firstName + if (update.user.lastName.isNullOrBlank()) "" else " ${update.user.lastName}"
+                    )
                 }
             }
         }

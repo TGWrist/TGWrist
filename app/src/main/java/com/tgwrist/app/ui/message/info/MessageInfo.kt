@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.remember
@@ -61,10 +62,10 @@ import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.StatusTimeText
 import com.tgwrist.app.ui.message.info.message.factory.MessageContentFactory
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
-import com.tgwrist.app.utils.ChatMessagesRepository
+import com.tgwrist.app.runtime.ChatMessagesRepository
 import com.tgwrist.app.utils.LocalGlobalAppState
-import com.tgwrist.app.utils.TgClient
-import com.tgwrist.app.utils.UserManager
+import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.runtime.UserManager
 import com.tgwrist.app.utils.dateTimeUserPref
 import com.tgwrist.app.utils.handleAllMessages
 import com.tgwrist.app.utils.openChatOnPhone
@@ -162,8 +163,8 @@ fun MessageInfo(chatId: Long, msgIdList: List<Long>) {
         }
     }
 
-    var messagePropertiesById by remember(chatId) {
-        mutableStateOf<Map<Long, TdApi.MessageProperties?>>(emptyMap())
+    val messagePropertiesById = remember(chatId) {
+        mutableStateMapOf<Long, TdApi.MessageProperties?>()
     }
 
     val loadingIds = remember(chatId) {
@@ -188,7 +189,7 @@ fun MessageInfo(chatId: Long, msgIdList: List<Long>) {
                         }
                     }
 
-                    messagePropertiesById = messagePropertiesById + (msgId to properties)
+                    messagePropertiesById[msgId] = properties
                 } finally {
                     loadingIds.remove(msgId)
                 }
@@ -776,8 +777,8 @@ fun MessageInfo(chatId: Long, msgIdList: List<Long>) {
                                     chat = chatObject,
                                     message = message,
                                     properties = messagePropertiesById[message.id],
-                                    useDialog = {
-                                        dialogItem = it
+                                    useDialog = { dialog ->
+                                        dialogItem = dialog
                                         isShowDialog = true
                                     }
                                 )

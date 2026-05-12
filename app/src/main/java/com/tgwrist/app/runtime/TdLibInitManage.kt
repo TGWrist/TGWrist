@@ -1,4 +1,4 @@
-package com.tgwrist.app.utils
+package com.tgwrist.app.runtime
 
 import android.util.Log
 import androidx.navigation.NavController
@@ -8,6 +8,7 @@ import com.google.firebase.analytics.analytics
 import com.google.firebase.messaging.FirebaseMessaging
 import com.tgwrist.app.TGWrist
 import com.tgwrist.app.ui.Destinations
+import com.tgwrist.app.utils.setTdlibParameters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

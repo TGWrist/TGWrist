@@ -1,4 +1,4 @@
-package com.tgwrist.app.utils
+package com.tgwrist.app.runtime
 
 import android.content.Context
 import android.content.SharedPreferences

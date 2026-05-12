@@ -20,8 +20,8 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.TgClient
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.drinkless.tdlib.TdApi
 import kotlin.coroutines.resume

@@ -205,4 +205,12 @@
     <string name="Delete_for_everyone">Delete for everyone</string>
     <string name="Delete_for_me_only">This will delete them just for you.</string>
     <string name="Delete_for_everyone_only">This will delete it for everyone.</string>
+    <string name="Calling">Calling</string>
+    <string name="Call_status_calling_you">Calling you</string>
+    <string name="Call_status_requesting">Requesting…</string>
+    <string name="Call_status_waiting">Waiting…</string>
+    <string name="Call_status_ringing">Ringing</string>
+    <string name="Call_status_exchanging_keys">Exchanging keys…</string>
+    <string name="Tap_to_return_to_call">Tap to return to call</string>
+    <string name="Need_mic_permission">Microphone access required</string>
 </resources>

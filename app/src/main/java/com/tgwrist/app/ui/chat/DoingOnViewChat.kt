@@ -1,7 +1,7 @@
 package com.tgwrist.app.ui.chat
 
 import androidx.compose.runtime.Composable
-import com.tgwrist.app.utils.TgClient
+import com.tgwrist.app.runtime.TgClient
 import org.drinkless.tdlib.TdApi
 
 @Composable

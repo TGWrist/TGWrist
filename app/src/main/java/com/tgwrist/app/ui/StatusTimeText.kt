@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.curvedComposable
 import androidx.wear.compose.material3.TimeText
 import androidx.wear.compose.material3.timeTextCurvedText
-import com.tgwrist.app.utils.Config
-import com.tgwrist.app.utils.Config.connectionState
+import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.Config.connectionState
 
 @Composable
 fun StatusTimeText(text: String? = null) {
