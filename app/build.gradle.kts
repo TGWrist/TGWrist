@@ -21,8 +21,8 @@ android {
         applicationId = "com.tgwrist.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "3.3"
+        versionCode = 26
+        versionName = "3.7"
     }
 
     signingConfigs {
@@ -114,6 +114,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.horologist)
     implementation(libs.androidx.wear.remote.interactions)
+    implementation(libs.androidx.ongoing)
     //implementation(libs.zoomable)
     implementation(libs.zoomimage.compose.coil2)
     implementation(libs.accompanist.drawablepainter)
@@ -123,6 +124,7 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.androidx.graphics.shapes)
     implementation(libs.androidx.media3.common.ktx)
+    implementation(libs.lottie.compose)
     implementation(libs.relinker)
     implementation(libs.checker.qual)
     androidTestImplementation(platform(libs.compose.bom))

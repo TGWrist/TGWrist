@@ -7,3 +7,6 @@
 [submodule "app/thirdparty/androidx-media"]
 	path = app/thirdparty/androidx-media
 	url = https://github.com/androidx/media
+[submodule "app/src/main/jniLibs"]
+	path = app/src/main/jniLibs
+	url = https://github.com/TGWrist/jniLibs

@@ -146,7 +146,9 @@ fun MessageInfo(chatId: Long, msgIdList: List<Long>) {
         for (msgId in missingIds) {
             val msg = suspendCancellableCoroutine { cont ->
                 TgClient.send(TdApi.GetMessage(chatId, msgId)) { res ->
-                    cont.resume(res as? TdApi.Message)
+                    if (cont.isActive) { // 检查协程是否仍然活跃
+                        cont.resume(res as? TdApi.Message)
+                    }
                 }
             }
             if (msg != null) {

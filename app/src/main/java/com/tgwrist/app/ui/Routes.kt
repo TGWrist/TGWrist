@@ -20,6 +20,7 @@ object Destinations {
     const val VIDEO_VIEW = "VideoView/{path}"
     const val TEXT_VIEW = "TextView?text={text}&textId={textId}"
     const val MESSAGE_INFO = "messageInfo/{chatId}/{key}"
+    const val MEDIA_PICKER = "mediaPicker"
     const val TEST = "test"
     // 方便跳转的辅助函数
     fun chat(id: Long) = "chat/$id"

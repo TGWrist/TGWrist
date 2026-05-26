@@ -1,6 +1,7 @@
 package com.tgwrist.app.ui
 
 import android.content.ActivityNotFoundException
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,7 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MicOff
@@ -47,7 +48,14 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.TextButton
+import com.tgwrist.app.data.MediaPickerRequest
+import com.tgwrist.app.data.MediaPickerType
 import com.tgwrist.app.utils.LocalGlobalAppState
+
+// 文件级 state：跨 composition 销毁、跨 navigation 都能存活（只在进程被杀时丢失）。
+// 用于演示 MediaPicker 的 preselected：上次多选的结果，下次进入页面时默认勾选。
+private var lastPickedImages by mutableStateOf<List<Uri>>(emptyList())
+private var lastPickedMixed by mutableStateOf<List<Uri>>(emptyList())
 
 @Composable
 fun TestScreen() {
@@ -120,7 +128,7 @@ fun TestScreen() {
                                 imageVector = if (selected1) {
                                     Icons.Rounded.CheckCircle
                                 } else {
-                                    Icons.Rounded.Chat
+                                    Icons.AutoMirrored.Rounded.Chat
                                 },
                                 contentDescription = null,
                                 modifier = Modifier.size(CardDefaults.AppImageSize)
@@ -181,7 +189,7 @@ fun TestScreen() {
                                 imageVector = if (selected2) {
                                     Icons.Rounded.CheckCircle
                                 } else {
-                                    Icons.Rounded.Chat
+                                    Icons.AutoMirrored.Rounded.Chat
                                 },
                                 contentDescription = null,
                                 modifier = Modifier.size(CardDefaults.AppImageSize)
@@ -242,7 +250,7 @@ fun TestScreen() {
                                 imageVector = if (selected3) {
                                     Icons.Rounded.CheckCircle
                                 } else {
-                                    Icons.Rounded.Chat
+                                    Icons.AutoMirrored.Rounded.Chat
                                 },
                                 contentDescription = null,
                                 modifier = Modifier.size(CardDefaults.AppImageSize)
@@ -339,6 +347,94 @@ fun TestScreen() {
 
                 item {
                     ImagePickerScreen()
+                }
+
+                // ===== MediaPicker 调用示例 =====
+                item {
+                    // 单选图片
+                    Button(onClick = {
+                        appState.mediaPickerRequest = MediaPickerRequest(
+                            type = MediaPickerType.IMAGE_ONLY,
+                            multiSelect = false,
+                        ) { result ->
+                            val uri = result.firstOrNull()?.uri
+
+                            android.widget.Toast.makeText(
+                                context,
+                                "Picked image: $uri",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        navController?.navigate(Destinations.MEDIA_PICKER)
+                    }) {
+                        Text("Pick 1 image")
+                    }
+                }
+
+                item {
+                    // 多选图片（最多 9 张），第二次打开会带上次选择的结果作为默认勾选
+                    Button(onClick = {
+                        appState.mediaPickerRequest = MediaPickerRequest(
+                            type = MediaPickerType.IMAGE_ONLY,
+                            multiSelect = true,
+                            maxCount = 9,
+                            preselected = lastPickedImages,
+                        ) { result ->
+                            lastPickedImages = result.map { it.uri }
+                            android.widget.Toast.makeText(
+                                context,
+                                "Picked ${result.size} images",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        navController?.navigate(Destinations.MEDIA_PICKER)
+                    }) {
+                        Text("Pick N images")
+                    }
+                }
+
+                item {
+                    // 单选视频
+                    Button(onClick = {
+                        appState.mediaPickerRequest = MediaPickerRequest(
+                            type = MediaPickerType.VIDEO_ONLY,
+                            multiSelect = false,
+                        ) { result ->
+                            val item = result.firstOrNull()
+                            android.widget.Toast.makeText(
+                                context,
+                                "Picked video: ${item?.uri} (${item?.durationMs}ms)",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        navController?.navigate(Destinations.MEDIA_PICKER)
+                    }) {
+                        Text("Pick 1 video")
+                    }
+                }
+
+                item {
+                    // 多选图片 + 视频（不限数量），同样演示 preselected
+                    Button(onClick = {
+                        appState.mediaPickerRequest = MediaPickerRequest(
+                            type = MediaPickerType.IMAGE_AND_VIDEO,
+                            multiSelect = true,
+                            maxCount = 0,
+                            preselected = lastPickedMixed,
+                        ) { result ->
+                            lastPickedMixed = result.map { it.uri }
+                            val imgs = result.count { !it.isVideo }
+                            val vids = result.count { it.isVideo }
+                            android.widget.Toast.makeText(
+                                context,
+                                "Picked $imgs images, $vids videos",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        navController?.navigate(Destinations.MEDIA_PICKER)
+                    }) {
+                        Text("Pick mixed media")
+                    }
                 }
 
                 item {

@@ -1,11 +1,14 @@
 package com.tgwrist.app.notification
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.tgwrist.app.TGWrist
+import com.tgwrist.app.runtime.CALL_STATE_NONE
 import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.TgCallManager
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.runtime.UserManager
 import com.tgwrist.app.utils.setTdlibParameters
@@ -14,7 +17,10 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import org.drinkless.tdlib.TdApi
 import java.io.IOException
 import kotlin.coroutines.resume
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class NotificationBackgroundWorker(
     appContext: Context,
@@ -23,7 +29,33 @@ class NotificationBackgroundWorker(
 
     companion object {
         private const val TAG = "NotifBgWorker"
+
+        /**
+         * FIX: 通话保持上限。
+         *
+         * WorkManager 单次任务大约有 10 分钟的硬性执行上限，超时会被强制取消。
+         * 这里压到 9 分钟，给系统留点余量；远大于用户接听一次电话需要的时间。
+         * 通话一旦结束（callState 回到 CALL_STATE_NONE）会立刻提前退出，不会真等满 9 分钟。
+         */
+        private val MAX_CALL_HOLD: Duration = 9.minutes
+
+        /**
+         * FIX: 来电通知弹出后，等 TgCallManager.callState 真正切到非 NONE 的宽限窗口。
+         *
+         * 场景：showIncomingCallNotifications 已经 nm.notify 弹出来电通知，但
+         * TgCallManager 接收 UpdateCall 是异步的，可能慢几百毫秒到几秒。如果 Worker
+         * 恰好在这个间隙 finally 退出，TgClient 会被 close，这通电话就接不到了。
+         * 在这段窗口内，即使 callState 还是 NONE 也继续把 Worker 挂住等。
+         */
+        private val INCOMING_CALL_GRACE: Duration = 30.seconds
     }
+
+    /**
+     * FIX: 本次 Worker 启动的时间戳（elapsedRealtime）。
+     * 用来判断 [Push.lastIncomingCallNotificationAt] 是否是"由本次 Worker 触发后弹出的来电通知"，
+     * 避免被上一轮残留的时间戳误导而无谓挂起。
+     */
+    private val workStartedAt: Long = SystemClock.elapsedRealtime()
 
     override suspend fun doWork(): Result {
         return when (val action = inputData.getString("ACTION")) {
@@ -120,6 +152,83 @@ class NotificationBackgroundWorker(
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error", e)
             Result.failure()
+        } finally {
+            // FIX: 如果当前正处于通话状态，就把 Worker 强行挂在这里直到通话结束（或达到上限）。
+            // 原因：Worker 一旦结束，withTgClientSession 的 finally 会尝试 close TgClient；
+            // 一旦 TgClient 被关掉，进行中的 / 即将到来的来电都会丢失。
+            // 这里通过轮询 callState，让 TgClient 单例在整段通话期间持续存活，
+            // 用户才有机会正常接听这个电话。1
+            awaitCallSafely()
+        }
+    }
+
+    /**
+     * FIX: 当处于通话中时，尽可能长时间地把 Worker 挂住，避免 TgClient 被 close 后电话丢失。
+     *
+     * 决策依据：
+     * - TgCallManager.callState != NONE：肯定要继续挂着。
+     * - showIncomingCallNotifications 刚 nm.notify 完，但 callState 还没切：
+     *   也要挂着（INCOMING_CALL_GRACE 宽限窗口内），给 TgCallManager 接收
+     *   UpdateCall 的时间。
+     *
+     * 退出条件（任一满足）：
+     * - 一旦 callState 进入过非 NONE 状态，再回到 NONE：通话已结束，立刻退出。
+     * - 还没观察到通话激活，宽限期也已经走完：来电没有真正发生（或被对方挂掉了）。
+     * - 总耗时达到 MAX_CALL_HOLD 上限：避免触碰 WorkManager 的 10 分钟硬上限。
+     */
+    private suspend fun awaitCallSafely() {
+        // 计算"本次 Worker 触发的来电通知"的时间戳。早于 workStartedAt 的视为无效，避免被上轮残留状态影响。
+        fun freshCallNotifyAt(): Long {
+            val ts = Push.lastIncomingCallNotificationAt
+            return if (ts >= workStartedAt) ts else 0L
+        }
+
+        val initialCallActive = TgCallManager.callState.value != CALL_STATE_NONE
+        val initialNotifyAt = freshCallNotifyAt()
+
+        if (!initialCallActive && initialNotifyAt == 0L) {
+            // 没在通话，也没刚弹出来电通知：直接走原本的关闭流程。
+            return
+        }
+
+        Log.d(
+            TAG,
+            "Holding worker alive (callActive=$initialCallActive, justNotifiedCall=${initialNotifyAt != 0L})"
+        )
+
+        val holdStart = SystemClock.elapsedRealtime()
+        val maxHoldMs = MAX_CALL_HOLD.inWholeMilliseconds
+        val graceMs = INCOMING_CALL_GRACE.inWholeMilliseconds
+        val pollInterval = 1.seconds
+
+        var seenCallActive = initialCallActive
+
+        while (true) {
+            val elapsed = SystemClock.elapsedRealtime() - holdStart
+            if (elapsed >= maxHoldMs) {
+                Log.w(TAG, "Reached max call hold (${MAX_CALL_HOLD}), releasing worker")
+                break
+            }
+
+            val callActive = TgCallManager.callState.value != CALL_STATE_NONE
+            if (callActive) {
+                seenCallActive = true
+            } else if (seenCallActive) {
+                // 曾经接通过 / 进入过通话流程，现在又回到 NONE：通话结束。
+                Log.d(TAG, "Call ended, releasing worker after ${elapsed}ms")
+                break
+            } else {
+                // 还没观察到通话激活：看刚弹出的来电通知是否还在宽限期内。
+                val notifyAt = freshCallNotifyAt()
+                val withinGrace = notifyAt != 0L &&
+                        (SystemClock.elapsedRealtime() - notifyAt) < graceMs
+                if (!withinGrace) {
+                    Log.d(TAG, "Incoming call grace expired without active call, releasing")
+                    break
+                }
+            }
+
+            delay(pollInterval)
         }
     }
 
@@ -321,7 +430,7 @@ class NotificationBackgroundWorker(
         } finally {
             try {
                 // 关闭 TgClient
-                if (!Config.isMainActivityAlive) TgClient.close()
+                if (!Config.isMainActivityAlive && TgCallManager.callState.value == CALL_STATE_NONE) TgClient.close()
             } catch (closeError: Exception) {
                 // FIX: 防止 close 自己抛异常影响 Worker 最终结果
                 Log.e(TAG, "Failed to close TgClient", closeError)

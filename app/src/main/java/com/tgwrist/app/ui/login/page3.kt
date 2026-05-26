@@ -1,5 +1,7 @@
 package com.tgwrist.app.ui.login
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
@@ -39,12 +41,15 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.tgwrist.app.R
 import com.tgwrist.app.TGWrist
-import com.tgwrist.app.ui.TextInputChip
 import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.ui.TextInputChip
 import com.tgwrist.app.utils.setTdlibParameters
+import okhttp3.ConnectionSpec
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.drinkless.tdlib.TdApi
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -156,16 +161,30 @@ internal fun Page3(
     }
 }
 
-private const val TEST_SERVER_URL = "https://api.tgwrist.top/" // 测试后端地址
+private const val TEST_SERVER_URL = "https://api.tgwrist.top/"
 private const val POLL_INTERVAL_MS = 2000L
-private const val MAX_POLL_ATTEMPTS = 60 // 最多轮询 60 次（约 2 分钟）
+private const val MAX_POLL_ATTEMPTS = 60
+
+// 1. 全局单例的 OkHttpClient，移除 DoH，但保留了现代 TLS 规范和针对 Wear OS 的超时优化
+private val okHttpClient by lazy {
+    OkHttpClient.Builder()
+        // 核心：强制开启 TLS 1.2+ 的现代密码套件，规范化握手，彻底告别 HttpURLConnection 的 SNI 缺陷
+        .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS, ConnectionSpec.COMPATIBLE_TLS))
+        // Wear OS 的蓝牙网络代理容易延迟，给足 15 秒的握手和响应时间
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .build()
+}
+
+/**
+ * 辅助方法：确保回调在主线程（UI线程）执行，防止 Compose 状态更新引发崩溃
+ */
+private fun runOnMainThread(action: () -> Unit) {
+    Handler(Looper.getMainLooper()).post(action)
+}
 
 /**
  * 测试模式：通过 Python 后端自动完成手机号验证流程
- * @param apiKey 用户在密码框中输入的 API Key（后端鉴权用）
- * @param errorRequestText 错误提示前缀文本（来自 R.string.Request_error）
- * @param errorCallback 错误回调，用于显示错误弹窗
- * @param onSendingRequestChanged 控制 sendingRequest 状态
  */
 private fun testMode(
     apiKey: String,
@@ -173,27 +192,20 @@ private fun testMode(
     errorCallback: (String) -> Unit,
     onSendingRequestChanged: (Boolean) -> Unit
 ) {
-    // TODO 代码能用但有Bug，记得改
     Thread {
         try {
             val baseUrl = TEST_SERVER_URL.trimEnd('/')
 
-            // ===== 1. 获取初始 code 并存储 =====
+            // ===== 1. 获取初始 code =====
             val codeJson = postToServer("$baseUrl/code", apiKey)
-            if (codeJson.get("ok")?.asBoolean != true) {
-                throw Exception("Server returned ok=false on /code")
-            }
-            val initialCode = codeJson.get("code")?.asString
-                ?: throw Exception("Failed to get code from server")
+            if (codeJson.get("ok")?.asBoolean != true) throw Exception("Server returned ok=false on /code")
+            val initialCode = codeJson.get("code")?.asString ?: throw Exception("Failed to get code from server")
             Log.d("TestMode", "Initial code: $initialCode")
 
             // ===== 2. 获取手机号 =====
             val accountJson = postToServer("$baseUrl/account", apiKey)
-            if (accountJson.get("ok")?.asBoolean != true) {
-                throw Exception("Server returned ok=false on /account")
-            }
-            val phone = accountJson.getAsJsonObject("account")?.get("phone")?.asString
-                ?: throw Exception("Failed to get phone from server")
+            if (accountJson.get("ok")?.asBoolean != true) throw Exception("Server returned ok=false on /account")
+            val phone = accountJson.getAsJsonObject("account")?.get("phone")?.asString ?: throw Exception("Failed to get phone from server")
             val phoneNumber = "+$phone"
             Log.d("TestMode", "Phone: $phoneNumber")
 
@@ -202,16 +214,13 @@ private fun testMode(
             var phoneError: TdApi.Error? = null
 
             TgClient.send(TdApi.SetAuthenticationPhoneNumber(phoneNumber, null)) {
-                if (it is TdApi.Error) {
-                    phoneError = it
-                }
+                if (it is TdApi.Error) phoneError = it
                 phoneLatch.countDown()
             }
             phoneLatch.await(30, TimeUnit.SECONDS)
 
             if (phoneError != null) {
                 val err = phoneError!!
-                // 处理 setTdlibParameters 未初始化的情况（与 page1 一致）
                 if (err.message == "Initialization parameters are needed: call setTdlibParameters first") {
                     TGWrist.context.setTdlibParameters(null)
                     val retryLatch = CountDownLatch(1)
@@ -222,21 +231,22 @@ private fun testMode(
                     }
                     retryLatch.await(30, TimeUnit.SECONDS)
                     if (retryError != null) {
-                        val e = retryError!!
-                        errorCallback("$errorRequestText\ncode:${e.code}\n${e.message}")
-                        onSendingRequestChanged(false)
-                        Log.e("TestMode", e.toString())
+                        runOnMainThread {
+                            errorCallback("$errorRequestText\ncode:${retryError!!.code}\n${retryError!!.message}")
+                            onSendingRequestChanged(false)
+                        }
                         return@Thread
                     }
                 } else {
-                    errorCallback("$errorRequestText\ncode:${err.code}\n${err.message}")
-                    onSendingRequestChanged(false)
-                    Log.e("TestMode", err.toString())
+                    runOnMainThread {
+                        errorCallback("$errorRequestText\ncode:${err.code}\n${err.message}")
+                        onSendingRequestChanged(false)
+                    }
                     return@Thread
                 }
             }
 
-            // ===== 4. 轮询 /code，等待 code 变化 =====
+            // ===== 4. 轮询 /code =====
             var newCode = initialCode
             var attempts = 0
             while (newCode == initialCode && attempts < MAX_POLL_ATTEMPTS) {
@@ -246,15 +256,15 @@ private fun testMode(
                     newCode = pollJson.get("code")?.asString ?: initialCode
                 } catch (e: Exception) {
                     Log.w("TestMode", "Poll #$attempts failed: ${e.message}")
-                    // 网络波动时继续重试，不立即退出
                 }
                 attempts++
-                Log.d("TestMode", "Poll #$attempts, code: $newCode")
             }
 
             if (newCode == initialCode) {
-                errorCallback("Timeout: code did not change after $attempts attempts")
-                onSendingRequestChanged(false)
+                runOnMainThread {
+                    errorCallback("Timeout: code did not change after $attempts attempts")
+                    onSendingRequestChanged(false)
+                }
                 return@Thread
             }
 
@@ -263,49 +273,40 @@ private fun testMode(
             // ===== 5. CheckAuthenticationCode =====
             TgClient.send(TdApi.CheckAuthenticationCode(newCode)) {
                 if (it is TdApi.Error) {
-                    val errorText = "$errorRequestText\ncode:${it.code}\n${it.message}"
-                    errorCallback(errorText)
-                    onSendingRequestChanged(false)
-                    Log.e("TestMode", it.toString())
+                    runOnMainThread {
+                        errorCallback("$errorRequestText\ncode:${it.code}\n${it.message}")
+                        onSendingRequestChanged(false)
+                    }
                 }
-                // 成功时由 LoginScreen 的 AuthorizationStateReady 监听自动跳转
             }
         } catch (e: Exception) {
             Log.e("TestMode", "Error in testMode", e)
-            errorCallback("$errorRequestText\n${e.message}")
-            onSendingRequestChanged(false)
+            runOnMainThread {
+                errorCallback("$errorRequestText\n${e.message}")
+                onSendingRequestChanged(false)
+            }
         }
     }.start()
 }
 
 /**
- * 向后端发送 POST 请求（携带 apikey）并解析 JSON 响应
+ * 使用纯净版 OkHttp 进行 POST 请求
  */
 private fun postToServer(url: String, apiKey: String): JsonObject {
-    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-        requestMethod = "POST"
-        setRequestProperty("Content-Type", "application/json; charset=utf-8")
-        doOutput = true
-        connectTimeout = 10_000
-        readTimeout = 10_000
-    }
-    try {
-        val body = """{"apikey":"$apiKey"}"""
-        connection.outputStream.use { os ->
-            os.write(body.toByteArray(Charsets.UTF_8))
-        }
+    val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    val body = """{"apikey":"$apiKey"}""".toRequestBody(jsonMediaType)
 
-        val responseCode = connection.responseCode
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            val errorBody = try {
-                connection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-            } catch (_: Exception) { "" }
-            throw Exception("HTTP $responseCode: $errorBody")
-        }
+    val request = Request.Builder()
+        .url(url)
+        .post(body)
+        .build()
 
-        val responseBody = connection.inputStream.bufferedReader().use { it.readText() }
+    okHttpClient.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) {
+            val errorBody = response.body?.string() ?: ""
+            throw Exception("HTTP ${response.code}: $errorBody")
+        }
+        val responseBody = response.body?.string() ?: "{}"
         return Gson().fromJson(responseBody, JsonObject::class.java)
-    } finally {
-        connection.disconnect()
     }
 }

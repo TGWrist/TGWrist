@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,7 +39,13 @@ fun TextViewScreen(
     val focusRequester = remember { FocusRequester() }
     // 只有当最大滚动值 > 0 时，才认为需要显示滚动条
     val isScrollable = scrollState.maxValue > 0
-    var tgText by remember(textId) { mutableStateOf<TdApi.FormattedText?>(null) }
+    var tgText by remember { mutableStateOf<TdApi.FormattedText?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            appState.tgTextIdMap.remove(textId)  // 移除记录
+        }
+    }
 
     LaunchedEffect(text, textId) {
         if (text != null) return@LaunchedEffect
@@ -51,8 +58,6 @@ fun TextViewScreen(
         tgText = appState.tgTextIdMap[textId]
         if (tgText == null) {
             navController.popBackStack()
-        } else {
-            appState.tgTextIdMap.remove(textId) // 取出后立即移除，避免占用内存
         }
     }
 

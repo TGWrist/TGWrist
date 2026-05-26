@@ -36,7 +36,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
-import com.tgwrist.app.ui.main.ThumbnailChatPhoto
+import com.tgwrist.app.ui.ThumbnailChatPhoto
 import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.utils.handleAllMessages

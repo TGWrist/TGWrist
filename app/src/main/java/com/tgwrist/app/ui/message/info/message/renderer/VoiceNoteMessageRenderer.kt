@@ -1,11 +1,8 @@
 package com.tgwrist.app.ui.message.info.message.renderer
 
-import android.content.ContentValues
-import android.content.Intent
-import android.os.Build
-import android.os.Environment
-import android.provider.MediaStore
+import android.media.MediaPlayer
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,12 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -36,13 +34,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -66,22 +65,33 @@ import com.tgwrist.app.ui.message.info.TranslationButton
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import com.tgwrist.app.utils.setClipboardText
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.drinkless.tdlib.TdApi
-import java.io.File
-import kotlin.math.log10
-import kotlin.math.pow
+import kotlin.math.max
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * 格式化文件大小为可读的字符串
+ * 把 5-bit 紧凑波形数据解包成 [0,31] 的振幅数组。
+ * Telegram 用 5 位记录每个采样点，按位流连续存储。
  */
-private fun formatFileSize(bytes: Long): String {
-    if (bytes <= 0) return "0 B"
-    val units = arrayOf("B", "KB", "MB", "GB", "TB")
-    val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt()
-    val idx = digitGroups.coerceIn(0, units.size - 1)
-    return "%.1f %s".format(bytes / 1024.0.pow(idx.toDouble()), units[idx])
+private fun decodeWaveform(packed: ByteArray?): IntArray {
+    if (packed == null || packed.isEmpty()) return IntArray(0)
+    val sampleCount = packed.size * 8 / 5
+    val out = IntArray(sampleCount)
+    for (i in 0 until sampleCount) {
+        val bitIndex = i * 5
+        val byteIndex = bitIndex ushr 3
+        val bitOffset = bitIndex and 0x07
+        // 取 16-bit 视窗，避免跨字节
+        val low = packed[byteIndex].toInt() and 0xFF
+        val high = if (byteIndex + 1 < packed.size) packed[byteIndex + 1].toInt() and 0xFF else 0
+        val value = (low or (high shl 8)) ushr bitOffset
+        out[i] = value and 0x1F
+    }
+    return out
 }
 
 /**
@@ -92,9 +102,19 @@ private fun calculateProgress(downloadedSize: Long, size: Long, expectedSize: Lo
     return (downloadedSize.toFloat() / total).coerceIn(0f, 1f)
 }
 
+/**
+ * 把秒数格式化为 mm:ss
+ */
+private fun formatDuration(totalSeconds: Int): String {
+    val seconds = max(totalSeconds, 0)
+    val minutes = seconds / 60
+    val secs = seconds % 60
+    return "%02d:%02d".format(minutes, secs)
+}
+
 @Composable
-fun DocumentMessageRenderer(
-    content: TdApi.MessageDocument,
+fun VoiceNoteMessageRenderer(
+    content: TdApi.MessageVoiceNote,
     messageRenderContext: MessageRenderContext,
 ) {
     val context = LocalContext.current
@@ -102,37 +122,34 @@ fun DocumentMessageRenderer(
     val navController = messageRenderContext.navController
     val coroutineScope = rememberCoroutineScope()
 
-    val document = content.document
-    val fileName = remember(document) { document.fileName.ifBlank { "unknown" } }
-    val mimeType = remember(document) { document.mimeType.ifBlank { "application/octet-stream" } }
-    val fileSize = remember(document) { document.document.size }
-    val fileSizeText = remember(fileSize) { formatFileSize(fileSize) }
+    val voiceNote = content.voiceNote
+    val duration = remember(voiceNote) { voiceNote.duration }
+    val mimeType = remember(voiceNote) { voiceNote.mimeType.ifBlank { "audio/ogg" } }
+    val waveformBars = remember(voiceNote) { decodeWaveform(voiceNote.waveform) }
+    val recognizedText: TdApi.SpeechRecognitionResult? = voiceNote.speechRecognitionResult
 
     val caption = remember(content.caption) { content.caption }
     var translateCaption by remember { mutableStateOf<TdApi.FormattedText?>(null) }
 
-    // 字符串变量
+    // 字符串资源
     val copiedClipboard = stringResource(R.string.Copied_clipboard)
-    val strFileSavedToPath = stringResource(R.string.file_saved_to_path)
-    val strFileSaveFailed = stringResource(R.string.file_save_failed)
-    val strNoAppToOpen = stringResource(R.string.no_app_to_open)
+    val strPlayFailed = stringResource(R.string.voice_play_failed)
 
     // 文件状态
-    var fileId by remember { mutableIntStateOf(document.document.id) }
+    val fileId by remember { mutableIntStateOf(voiceNote.voice.id) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
     var fileLocalPath by remember { mutableStateOf("") }
     var isDownloading by remember { mutableStateOf(false) }
 
-    // 保存状态
-    var isSaved by remember { mutableStateOf(false) }
-    var isSaving by remember { mutableStateOf(false) }
+    // 播放状态
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var playbackPositionMs by remember { mutableIntStateOf(0) }
+    var playbackDurationMs by remember { mutableIntStateOf(duration * 1000) }
 
-    // 保存成功弹窗
-    var savedFilePath by remember { mutableStateOf("") }
-
-    // ========== 页面打开时，先用消息自带信息初始化，再用 GetFile 刷新 ==========
+    // ========== 初始化文件状态 ==========
     LaunchedEffect(Unit) {
-        val initialFile = document.document
+        val initialFile = voiceNote.voice
         if (initialFile.local.isDownloadingCompleted) {
             fileLocalPath = initialFile.local.path
             downloadProgress = 1f
@@ -145,7 +162,6 @@ fun DocumentMessageRenderer(
             )
         }
 
-        // 异步通过 GetFile 获取最新文件状态
         TgClient.send(TdApi.GetFile(fileId)) { result ->
             if (result is TdApi.File) {
                 if (result.local.isDownloadingCompleted) {
@@ -160,7 +176,6 @@ fun DocumentMessageRenderer(
                         result.expectedSize
                     )
                 } else {
-                    // 文件既没下载完也没在下载中，重置状态
                     isDownloading = false
                 }
             }
@@ -176,13 +191,9 @@ fun DocumentMessageRenderer(
                     update.file.size,
                     update.file.expectedSize
                 )
-
-                // 文件开始下载 → 切换到进度条
                 if (update.file.local.isDownloadingActive) {
                     isDownloading = true
                 }
-
-                // 文件下载完成 → 切换到保存按钮
                 if (update.file.local.isDownloadingCompleted) {
                     fileLocalPath = update.file.local.path
                     isDownloading = false
@@ -192,12 +203,37 @@ fun DocumentMessageRenderer(
         }
     }
 
-    // ========== 开始下载文件 ==========
+    // ========== 播放进度轮询 ==========
+    LaunchedEffect(isPlaying) {
+        while (isPlaying && this.coroutineContext.isActive) {
+            mediaPlayer?.let { mp ->
+                runCatching {
+                    if (mp.isPlaying) {
+                        playbackPositionMs = mp.currentPosition
+                    }
+                }
+            }
+            delay(100L.milliseconds)
+        }
+    }
+
+    // ========== 释放 MediaPlayer ==========
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching {
+                mediaPlayer?.let { mp ->
+                    if (mp.isPlaying) mp.stop()
+                    mp.release()
+                }
+            }
+            mediaPlayer = null
+            isPlaying = false
+        }
+    }
+
     fun startDownload() {
         isDownloading = true
-        TgClient.send(
-            TdApi.DownloadFile(fileId, 28, 0, 0, false)
-        ) { result ->
+        TgClient.send(TdApi.DownloadFile(fileId, 30, 0, 0, false)) { result ->
             if (result is TdApi.File) {
                 downloadProgress = calculateProgress(
                     result.local.downloadedSize,
@@ -213,7 +249,6 @@ fun DocumentMessageRenderer(
         }
     }
 
-    // ========== 取消下载文件 ==========
     fun cancelDownload() {
         TgClient.send(TdApi.CancelDownloadFile(fileId, false)) { result ->
             if (result is TdApi.Ok) {
@@ -223,108 +258,53 @@ fun DocumentMessageRenderer(
         }
     }
 
-    // ========== 保存到下载目录 ==========
-    fun saveToDownloads() {
-        if (fileLocalPath.isBlank() || isSaving) return
-        isSaving = true
-        coroutineScope.launch {
-            try {
-                val resultPath: String? = withContext(Dispatchers.IO) {
-                    val sourceFile = File(fileLocalPath)
-                    if (!sourceFile.exists()) return@withContext null
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        val resolver = context.contentResolver
-                        val contentValues = ContentValues().apply {
-                            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                            put(MediaStore.Downloads.MIME_TYPE, mimeType)
-                            put(
-                                MediaStore.Downloads.RELATIVE_PATH,
-                                Environment.DIRECTORY_DOWNLOADS + "/TGWrist"
-                            )
-                        }
-                        val uri = resolver.insert(
-                            MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
-                            contentValues
-                        )
-                        if (uri != null) {
-                            resolver.openOutputStream(uri)?.use { outputStream ->
-                                sourceFile.inputStream().use { inputStream ->
-                                    inputStream.copyTo(outputStream)
-                                }
-                            }
-                            "${Environment.DIRECTORY_DOWNLOADS}/TGWrist/$fileName"
-                        } else {
-                            null
-                        }
-                    } else {
-                        @Suppress("DEPRECATION")
-                        val downloadsDir = File(
-                            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                            "TGWrist"
-                        )
-                        if (!downloadsDir.exists()) downloadsDir.mkdirs()
-                        val destFile = File(downloadsDir, fileName)
-                        sourceFile.inputStream().use { input ->
-                            destFile.outputStream().use { output ->
-                                input.copyTo(output)
-                            }
-                        }
-                        if (destFile.exists()) destFile.absolutePath else null
-                    }
-                }
-
-                // 回到主线程更新 UI
-                if (resultPath != null) {
-                    isSaved = true
-                    savedFilePath = resultPath
-                    Toast.makeText(context, strFileSavedToPath.format(savedFilePath), Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, strFileSaveFailed, Toast.LENGTH_SHORT).show()
-                }
-            } catch (_: Exception) {
-                Toast.makeText(context, strFileSaveFailed, Toast.LENGTH_SHORT).show()
-            } finally {
-                isSaving = false
-            }
-        }
-    }
-
-    // ========== 用外部应用打开文件 ==========
-    fun openFile() {
+    fun togglePlayback() {
         if (fileLocalPath.isBlank()) return
-        try {
-            val file = File(fileLocalPath)
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
-            val resolvedMimeType = mimeType.let {
-                if (it.isBlank() || it == "application/octet-stream") "*/*" else it
-            }
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, resolvedMimeType)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            if (intent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(intent)
-            } else {
-                // Fallback with */*
-                val fallbackIntent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "*/*")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                if (fallbackIntent.resolveActivity(context.packageManager) != null) {
-                    context.startActivity(fallbackIntent)
+        val current = mediaPlayer
+        if (current != null) {
+            runCatching {
+                if (current.isPlaying) {
+                    current.pause()
+                    isPlaying = false
                 } else {
-                    Toast.makeText(context, strNoAppToOpen, Toast.LENGTH_SHORT).show()
+                    current.start()
+                    isPlaying = true
                 }
             }
-        } catch (_: Exception) {
-            Toast.makeText(context, strNoAppToOpen, Toast.LENGTH_SHORT).show()
+            return
+        }
+        // 全新创建
+        coroutineScope.launch {
+            val mp = withContext(Dispatchers.IO) {
+                runCatching {
+                    MediaPlayer().apply {
+                        setDataSource(fileLocalPath)
+                        prepare()
+                    }
+                }.getOrNull()
+            }
+            if (mp == null) {
+                Toast.makeText(context, strPlayFailed, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            mp.setOnCompletionListener {
+                // 播放完成
+                isPlaying = false
+                playbackPositionMs = 0
+                runCatching { it.seekTo(0) }
+                // 发送语音被阅读标记
+                TgClient.send(TdApi.OpenMessageContent(messageRenderContext.chatId, messageRenderContext.messageId))
+            }
+            mp.setOnErrorListener { player, _, _ ->
+                isPlaying = false
+                runCatching { player.release() }
+                if (mediaPlayer === player) mediaPlayer = null
+                true
+            }
+            mediaPlayer = mp
+            playbackDurationMs = if (mp.duration > 0) mp.duration else duration * 1000
+            mp.start()
+            isPlaying = true
         }
     }
 
@@ -332,6 +312,13 @@ fun DocumentMessageRenderer(
     val listState = rememberTransformingLazyColumnState()
     val overscroll = rememberOverscrollEffect()
     val transformationSpec = rememberTransformationSpec()
+
+    val playProgress = if (playbackDurationMs > 0) {
+        (playbackPositionMs.toFloat() / playbackDurationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    val playedColor = MaterialTheme.colorScheme.primary
+    val idleColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
 
     ScreenScaffold(
         scrollState = listState,
@@ -345,26 +332,71 @@ fun DocumentMessageRenderer(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ========== 文件图标 + 文件名 ==========
-            item(key = "file_icon") {
+            // ========== 麦克风图标 + 波形 + 时长进度文字 ==========
+            item(key = "voice") {
+                val totalDurationSec = (playbackDurationMs / 1000).takeIf { it > 0 } ?: duration
+                val currentSec = (playbackPositionMs / 1000).coerceAtLeast(0)
                 ListHeader(
                     contentPadding = PaddingValues(top = contentPadding.calculateTopPadding() * 0.2f, bottom = 4.dp, end = contentPadding.calculateEndPadding(
-                        LayoutDirection.Ltr), start = contentPadding.calculateStartPadding(LayoutDirection.Rtl)),
+                        LayoutDirection.Ltr) * 0.2f, start = contentPadding.calculateStartPadding(LayoutDirection.Rtl) * 0.2f),
                     transformation = SurfaceTransformation(transformationSpec),
                     modifier = Modifier
                         .transformedHeight(this, transformationSpec)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Rounded.Description,
-                            contentDescription = "File",
-                            modifier = Modifier.size(48.dp),
+                            imageVector = Icons.Rounded.Mic,
+                            contentDescription = stringResource(R.string.voice_note),
+                            modifier = Modifier.size(40.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
 
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        if (waveformBars.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.voice_no_waveform),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = idleColor
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(56.dp)
+                                    .padding(horizontal = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                    val barCount = waveformBars.size
+                                    val totalWidth = size.width
+                                    val totalHeight = size.height
+                                    val barWidth = totalWidth / barCount * 0.6f
+                                    val gap = totalWidth / barCount * 0.4f
+                                    val playedBoundary = totalWidth * playProgress
+                                    for (i in 0 until barCount) {
+                                        val amp = waveformBars[i] / 31f
+                                        val barHeight = (totalHeight * amp).coerceAtLeast(2f)
+                                        val x = i * (barWidth + gap) + barWidth / 2f
+                                        val y = (totalHeight - barHeight) / 2f
+                                        val color = if (x <= playedBoundary) playedColor else idleColor
+                                        drawLine(
+                                            color = color,
+                                            start = Offset(x, y),
+                                            end = Offset(x, y + barHeight),
+                                            strokeWidth = barWidth.coerceAtLeast(1f),
+                                            cap = StrokeCap.Round
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
                         Text(
-                            text = fileName,
-                            style = MaterialTheme.typography.titleSmall,
+                            text = "${formatDuration(currentSec)} / ${formatDuration(totalDurationSec)}",
+                            style = MaterialTheme.typography.labelSmall,
                             textAlign = TextAlign.Center,
                         )
                     }
@@ -385,17 +417,15 @@ fun DocumentMessageRenderer(
                     )
                 }
                 translateCaption?.let {
-                    item(key = "Translation_results") {
+                    item(key = "translation_results") {
                         Text(
                             style = MaterialTheme.typography.titleLarge,
                             textAlign = TextAlign.Center,
                             text = stringResource(R.string.Translation_results),
                             color = Color.White,
-                            modifier = Modifier
-                                .fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-
                     item(key = "translated_caption") {
                         MessageTextView(
                             text = it.text,
@@ -410,7 +440,35 @@ fun DocumentMessageRenderer(
                 }
             }
 
-            // ========== 下载进度条 ==========
+            // ========== 语音转文字（若 TDLib 已识别） ==========
+            (recognizedText as? TdApi.SpeechRecognitionResultText)?.let { result ->
+                if (result.text.isNotBlank()) {
+                    item(key = "speech_text_title") {
+                        Text(
+                            text = stringResource(R.string.voice_recognized_text),
+                            style = MaterialTheme.typography.labelMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .transformedHeight(this, transformationSpec)
+                        )
+                    }
+                    item(key = "speech_text") {
+                        Text(
+                            text = result.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .transformedHeight(this, transformationSpec)
+                                .padding(horizontal = 10.dp)
+                        )
+                    }
+                }
+            }
+
+            // ========== 下载进度 ==========
             if (isDownloading) {
                 item(key = "download_progress") {
                     Box(
@@ -422,12 +480,10 @@ fun DocumentMessageRenderer(
                     ) {
                         CircularProgressIndicator(
                             progress = downloadProgress,
-                            modifier = Modifier.size(48.dp)
+                            modifier = Modifier.size(40.dp)
                         )
                     }
                 }
-
-                // ========== 取消下载按钮 ==========
                 item(key = "cancel_download_button") {
                     FilledTonalButton(
                         onClick = { cancelDownload() },
@@ -458,7 +514,7 @@ fun DocumentMessageRenderer(
                         onClick = { startDownload() },
                         label = {
                             Text(
-                                text = stringResource(R.string.download_file),
+                                text = stringResource(R.string.download_voice),
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
@@ -476,68 +532,40 @@ fun DocumentMessageRenderer(
                 }
             }
 
+            // ========== 播放/暂停按钮 ==========
+            if (fileLocalPath.isNotBlank() && !isDownloading) {
+                item(key = "play_button") {
+                    FilledTonalButton(
+                        onClick = { togglePlayback() },
+                        label = {
+                            Text(
+                                text = if (isPlaying) stringResource(R.string.pause_voice)
+                                else stringResource(R.string.play_voice),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play"
+                            )
+                        },
+                        transformation = SurfaceTransformation(transformationSpec),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                    )
+                }
+            }
+
             // ========== 翻译按钮 ==========
             if (caption != null && !caption.text.isNullOrBlank()) {
-                item(key = "translate"){
+                item(key = "translate") {
                     TranslationButton(
                         modifier = Modifier.transformedHeight(this, transformationSpec),
                         surfaceTransformation = SurfaceTransformation(transformationSpec),
                         text = caption,
-                        onDone = {
-                            translateCaption = it
-                        }
-                    )
-                }
-            }
-
-            // ========== 用外部应用打开文件 ==========
-            if (fileLocalPath.isNotBlank() && !isDownloading) {
-                item(key = "open_button") {
-                    FilledTonalButton(
-                        onClick = { openFile() },
-                        label = {
-                            Text(
-                                text = stringResource(R.string.open_with_external),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
-                                contentDescription = "Open"
-                            )
-                        },
-                        transformation = SurfaceTransformation(transformationSpec),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                    )
-                }
-            }
-
-            // ========== 保存到下载目录按钮 ==========
-            if (fileLocalPath.isNotBlank() && !isDownloading) {
-                item(key = "save_button") {
-                    FilledTonalButton(
-                        onClick = { saveToDownloads() },
-                        enabled = !isSaving && !isSaved,
-                        label = {
-                            Text(
-                                text = if (isSaved) stringResource(R.string.file_saved)
-                                else stringResource(R.string.save_to_downloads),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Rounded.Save,
-                                contentDescription = "Save"
-                            )
-                        },
-                        transformation = SurfaceTransformation(transformationSpec),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
+                        onDone = { translateCaption = it }
                     )
                 }
             }
@@ -552,7 +580,7 @@ fun DocumentMessageRenderer(
                 )
             }
 
-            // 删除消息按钮
+            // 删除按钮
             if (messageRenderContext.chat != null) {
                 item(key = "Delete") {
                     DeleteMessageButton(
@@ -566,13 +594,14 @@ fun DocumentMessageRenderer(
                 }
             }
 
-            // ========== 文件大小 ==========
-            item(key = "file_size") {
+            // ========== 时长信息 ==========
+            item(key = "duration_card") {
+                val durationText = formatDuration(duration)
                 TitleCard(
-                    title = { Text(stringResource(R.string.file_size)) },
-                    onClick = { /* Not do something */ },
+                    title = { Text(stringResource(R.string.voice_duration)) },
+                    onClick = { },
                     onLongClick = {
-                        context.setClipboardText(fileSizeText)
+                        context.setClipboardText(durationText)
                         Toast.makeText(context, copiedClipboard, Toast.LENGTH_SHORT).show()
                     },
                     transformation = SurfaceTransformation(transformationSpec),
@@ -580,7 +609,7 @@ fun DocumentMessageRenderer(
                         .fillMaxWidth()
                         .transformedHeight(this, transformationSpec)
                 ) {
-                    Text(fileSizeText)
+                    Text(durationText)
                 }
             }
 
@@ -588,7 +617,7 @@ fun DocumentMessageRenderer(
             item(key = "file_type") {
                 TitleCard(
                     title = { Text(stringResource(R.string.file_type)) },
-                    onClick = { /* Not do something */ },
+                    onClick = { },
                     onLongClick = {
                         context.setClipboardText(mimeType)
                         Toast.makeText(context, copiedClipboard, Toast.LENGTH_SHORT).show()
@@ -601,9 +630,8 @@ fun DocumentMessageRenderer(
                     Text(mimeType)
                 }
             }
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-            }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
     }
 }

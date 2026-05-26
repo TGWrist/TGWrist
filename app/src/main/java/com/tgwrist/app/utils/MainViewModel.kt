@@ -33,7 +33,7 @@ class MainViewModel : ViewModel() {
                     // 初始化 TdLib 管理器
                     TdLibInitManage.init()
                     // 初始化 TDLib 客户端
-                    TgClient.close()
+                    //TgClient.close()
                     TgClient.init()
                 }
             } catch (e: Exception) {

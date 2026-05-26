@@ -6,7 +6,9 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -17,12 +19,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberOverscrollEffect
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,7 +37,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -55,26 +61,25 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import coil.size.Size
 import com.tgwrist.app.R
-import com.tgwrist.app.ui.Destinations
-import com.tgwrist.app.ui.message.info.DeleteMessageButton
-import com.tgwrist.app.ui.message.info.MessageTextView
-import com.tgwrist.app.ui.message.info.TranslationButton
-import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.ui.Destinations
+import com.tgwrist.app.ui.message.info.DeleteMessageButton
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
+import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.drinkless.tdlib.TdApi
 import java.io.File
 import kotlin.math.log10
+import kotlin.math.max
 import kotlin.math.pow
 
 /**
- * 格式化文件大小为可读的字符串
+ * 把字节大小格式化为易读文本（与 VideoMessageRenderer 保持一致的实现）
  */
-private fun formatFileSize(bytes: Long): String {
+private fun videoNoteFormatFileSize(bytes: Long): String {
     if (bytes <= 0) return "0 B"
     val units = arrayOf("B", "KB", "MB", "GB", "TB")
     val digitGroups = (log10(bytes.toDouble()) / log10(1024.0)).toInt()
@@ -85,14 +90,33 @@ private fun formatFileSize(bytes: Long): String {
 /**
  * 安全计算下载进度
  */
-private fun calculateProgress(downloadedSize: Long, size: Long, expectedSize: Long): Float {
+private fun videoNoteCalculateProgress(downloadedSize: Long, size: Long, expectedSize: Long): Float {
     val total = size.takeIf { it > 0 } ?: expectedSize.takeIf { it > 0 } ?: 1L
     return (downloadedSize.toFloat() / total).coerceIn(0f, 1f)
 }
 
+/**
+ * 把秒数格式化为 mm:ss
+ */
+private fun videoNoteFormatDuration(totalSeconds: Int): String {
+    val seconds = max(totalSeconds, 0)
+    val minutes = seconds / 60
+    val secs = seconds % 60
+    return "%02d:%02d".format(minutes, secs)
+}
+
+/**
+ * 圆形视频留言渲染器（TdApi.MessageVideoNote）。
+ *
+ * 视频留言是 Telegram 中的圆形短视频（必须等宽等高，裁切为圆形，MPEG4 格式）。
+ * - 缩略图与预览全部圆形裁切
+ * - 支持 isSecret（蒙层 + 点击揭示）
+ * - 支持 isViewed 状态展示
+ * - 视频本身没有 caption，故不渲染翻译/文字
+ */
 @Composable
-fun VideoMessageRenderer(
-    content: TdApi.MessageVideo,
+fun VideoNoteMessageRenderer(
+    content: TdApi.MessageVideoNote,
     messageRenderContext: MessageRenderContext,
 ) {
     val context = LocalContext.current
@@ -100,72 +124,83 @@ fun VideoMessageRenderer(
     val navController = messageRenderContext.navController
     val coroutineScope = rememberCoroutineScope()
 
-    val caption = remember(content.caption) { content.caption }
-    var translateCaption by remember { mutableStateOf<TdApi.FormattedText?>(null) }
-    val videoFileSize = remember { content.video.video.size }
-    val fileSizeText = remember(videoFileSize) { formatFileSize(videoFileSize) }
-    val mimeType = remember(content.video) { content.video.mimeType.ifBlank { "video/*" } }
+    val videoNote = remember(content.videoNote) { content.videoNote }
+    val isSecret = remember(content.isSecret) { content.isSecret }
+    val isViewed = remember(content.isViewed) { content.isViewed }
+    val durationSec = remember(videoNote) { videoNote?.duration ?: 0 }
+    val durationText = remember(durationSec) { videoNoteFormatDuration(durationSec) }
 
-    // 字符串变量
+    val videoFileSize = remember(videoNote) { videoNote?.video?.size ?: 0L }
+    val fileSizeText = remember(videoFileSize) { videoNoteFormatFileSize(videoFileSize) }
+    // VideoNote 没有 mimeType 字段，固定为 mp4
+    val mimeType = "video/mp4"
+
+    // 字符串资源
     val strFileSaveFailed = stringResource(R.string.file_save_failed)
     val strSavedToMediaLibrary = stringResource(R.string.saved_to_media_library)
     val strNoAppToOpen = stringResource(R.string.no_app_to_open)
 
     // ========== 缩略图下载 ==========
-    var thumbnailDownloadProgress by remember { mutableFloatStateOf(0f) }
-    val thumbnail = remember(content.video.thumbnail) { content.video.thumbnail }
+    val thumbnail = remember(videoNote?.thumbnail) { videoNote?.thumbnail }
     var thumbnailFileUrl by remember { mutableStateOf("") }
+    var thumbnailDownloadProgress by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(thumbnail?.file?.id) {
         thumbnail?.let {
-            if (!thumbnail.file.local.isDownloadingCompleted) {
+            if (it.file.local.isDownloadingCompleted) {
+                thumbnailFileUrl = it.file.local.path
+                thumbnailDownloadProgress = 1f
+            } else {
                 TgClient.send(
-                    TdApi.DownloadFile(thumbnail.file.id, 30, 0, 0, false)
+                    TdApi.DownloadFile(it.file.id, 30, 0, 0, false)
                 ) { result ->
                     if (result is TdApi.File) {
-                        thumbnailDownloadProgress = calculateProgress(
+                        thumbnailDownloadProgress = videoNoteCalculateProgress(
                             result.local.downloadedSize,
                             result.size,
                             result.expectedSize
                         )
                         if (result.local.isDownloadingCompleted) {
                             thumbnailFileUrl = result.local.path
+                            thumbnailDownloadProgress = 1f
                         }
                     }
                 }
-            } else {
-                thumbnailFileUrl = thumbnail.file.local.path
             }
         }
     }
 
     // ========== 视频文件状态 ==========
-    var videoDownloadProgress by remember { mutableFloatStateOf(0f) }
-    val video = remember(content.video.video) { content.video.video }
+    val video = remember(videoNote?.video) { videoNote?.video }
     var videoFileUrl by remember { mutableStateOf("") }
+    var videoDownloadProgress by remember { mutableFloatStateOf(0f) }
     var isDownloading by remember { mutableStateOf(false) }
 
     // 保存到媒体库状态
     var isSaving by remember { mutableStateOf(false) }
     var isSaved by remember { mutableStateOf(false) }
 
+    // 涂抹（secret）显示状态：isSecret 为 true 时初始遮挡，需要点击揭示
+    var isRevealed by remember(isSecret) { mutableStateOf(!isSecret) }
+
     // ========== 初始化视频文件状态 ==========
-    LaunchedEffect(Unit) {
-        if (video != null) {
-            if (video.local.isDownloadingCompleted) {
-                videoFileUrl = video.local.path
+    LaunchedEffect(video?.id) {
+        video?.let {
+            if (it.local.isDownloadingCompleted) {
+                videoFileUrl = it.local.path
                 videoDownloadProgress = 1f
-            } else if (video.local.isDownloadingActive) {
+                isDownloading = false
+            } else if (it.local.isDownloadingActive) {
                 isDownloading = true
-                videoDownloadProgress = calculateProgress(
-                    video.local.downloadedSize,
-                    video.size,
-                    video.expectedSize
+                videoDownloadProgress = videoNoteCalculateProgress(
+                    it.local.downloadedSize,
+                    it.size,
+                    it.expectedSize
                 )
             }
 
             // 异步通过 GetFile 获取最新文件状态
-            TgClient.send(TdApi.GetFile(video.id)) { result ->
+            TgClient.send(TdApi.GetFile(it.id)) { result ->
                 if (result is TdApi.File) {
                     if (result.local.isDownloadingCompleted) {
                         videoFileUrl = result.local.path
@@ -173,7 +208,7 @@ fun VideoMessageRenderer(
                         isDownloading = false
                     } else if (result.local.isDownloadingActive) {
                         isDownloading = true
-                        videoDownloadProgress = calculateProgress(
+                        videoDownloadProgress = videoNoteCalculateProgress(
                             result.local.downloadedSize,
                             result.size,
                             result.expectedSize
@@ -191,18 +226,19 @@ fun VideoMessageRenderer(
         TgClient.subscribe(TdApi.UpdateFile::class.java, lifecycleOwner) { update ->
             when (update.file.id) {
                 thumbnail?.file?.id -> {
-                    thumbnailDownloadProgress = calculateProgress(
+                    thumbnailDownloadProgress = videoNoteCalculateProgress(
                         update.file.local.downloadedSize,
                         update.file.size,
                         update.file.expectedSize
                     )
                     if (update.file.local.isDownloadingCompleted) {
                         thumbnailFileUrl = update.file.local.path
+                        thumbnailDownloadProgress = 1f
                     }
                 }
 
                 video?.id -> {
-                    videoDownloadProgress = calculateProgress(
+                    videoDownloadProgress = videoNoteCalculateProgress(
                         update.file.local.downloadedSize,
                         update.file.size,
                         update.file.expectedSize
@@ -225,10 +261,10 @@ fun VideoMessageRenderer(
         video?.let {
             isDownloading = true
             TgClient.send(
-                TdApi.DownloadFile(video.id, 28, 0, 0, false)
+                TdApi.DownloadFile(it.id, 28, 0, 0, false)
             ) { result ->
                 if (result is TdApi.File) {
-                    videoDownloadProgress = calculateProgress(
+                    videoDownloadProgress = videoNoteCalculateProgress(
                         result.local.downloadedSize,
                         result.size,
                         result.expectedSize
@@ -246,7 +282,7 @@ fun VideoMessageRenderer(
     // ========== 取消下载视频 ==========
     fun cancelDownload() {
         video?.let {
-            TgClient.send(TdApi.CancelDownloadFile(video.id, false)) { result ->
+            TgClient.send(TdApi.CancelDownloadFile(it.id, false)) { result ->
                 if (result is TdApi.Ok) {
                     isDownloading = false
                     videoDownloadProgress = 0f
@@ -286,7 +322,9 @@ fun VideoMessageRenderer(
                     val sourceFile = File(videoFileUrl)
                     if (!sourceFile.exists()) return@withContext false
 
-                    val fileName = sourceFile.name.ifBlank { "video_${System.currentTimeMillis()}.mp4" }
+                    val fileName = sourceFile.name.ifBlank {
+                        "video_note_${System.currentTimeMillis()}.mp4"
+                    }
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         val resolver = context.contentResolver
@@ -360,32 +398,104 @@ fun VideoMessageRenderer(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ========== 视频缩略图 ==========
+            // ========== 圆形缩略图（含 secret 蒙层） ==========
             item(key = "thumbnail") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .aspectRatio(1f)
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (thumbnailFileUrl.isNotBlank()) {
-                        Image(
-                            painter = rememberAsyncImagePainter(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(thumbnailFileUrl)
-                                    .size(Size.ORIGINAL)
-                                    .build()
-                            ),
-                            contentDescription = "Video_Thumbnail",
-                            modifier = Modifier.aspectRatio(1f)
-                        )
-                    } else {
-                        // 缩略图加载中
-                        CircularProgressIndicator(
-                            progress = thumbnailDownloadProgress,
-                            modifier = Modifier.size(48.dp)
-                        )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (thumbnailFileUrl.isNotBlank()) {
+                            Image(
+                                painter = rememberAsyncImagePainter(
+                                    model = ImageRequest.Builder(context)
+                                        .data(thumbnailFileUrl)
+                                        .size(Size.ORIGINAL)
+                                        .build()
+                                ),
+                                contentDescription = "VideoNote_Thumbnail",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            CircularProgressIndicator(
+                                progress = thumbnailDownloadProgress,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        }
+
+                        // Secret 蒙层（点击揭示）
+                        if (isSecret && !isRevealed) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clickable { isRevealed = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                    drawRect(color = Color.Black.copy(alpha = 0.55f))
+                                }
+                                Icon(
+                                    imageVector = Icons.Rounded.Visibility,
+                                    contentDescription = "Reveal",
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
                     }
+                }
+            }
+
+            // ========== 时长 ==========
+            if (durationSec > 0) {
+                item(key = "duration") {
+                    Text(
+                        text = stringResource(R.string.video_note_duration, durationText),
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                    )
+                }
+            }
+
+            // ========== 已查看 / 未查看 状态 ==========
+            item(key = "viewed_state") {
+                Text(
+                    text = if (isViewed) stringResource(R.string.video_note_viewed)
+                    else stringResource(R.string.video_note_unviewed),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                    color = if (isViewed) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .transformedHeight(this, transformationSpec)
+                )
+            }
+
+            // ========== Secret 提示 ==========
+            if (isSecret) {
+                item(key = "secret_hint") {
+                    Text(
+                        text = if (isRevealed) stringResource(R.string.video_note_secret)
+                        else stringResource(R.string.video_note_reveal),
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                    )
                 }
             }
 
@@ -400,45 +510,6 @@ fun VideoMessageRenderer(
                             .fillMaxWidth()
                             .transformedHeight(this, transformationSpec)
                     )
-                }
-            }
-
-            // ========== 说明文字 ==========
-            if (caption != null && !caption.text.isNullOrBlank()) {
-                item(key = "caption") {
-                    MessageTextView(
-                        text = caption.text,
-                        entities = caption.entities,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                            .padding(horizontal = 10.dp),
-                        navController = navController,
-                    )
-                }
-                translateCaption?.let {
-                    item(key = "Translation_results") {
-                        Text(
-                            style = MaterialTheme.typography.titleLarge,
-                            textAlign = TextAlign.Center,
-                            text = stringResource(R.string.Translation_results),
-                            color = Color.White,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                        )
-                    }
-
-                    item(key = "translated_caption") {
-                        MessageTextView(
-                            text = it.text,
-                            entities = it.entities,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .transformedHeight(this, transformationSpec)
-                                .padding(horizontal = 10.dp),
-                            navController = navController,
-                        )
-                    }
                 }
             }
 
@@ -508,30 +579,14 @@ fun VideoMessageRenderer(
                 }
             }
 
-            // ========== 翻译按钮 ==========
-            if (caption != null && !caption.text.isNullOrBlank()) {
-                item(key = "translate"){
-                    TranslationButton(
-                        modifier = Modifier.transformedHeight(this, transformationSpec),
-                        surfaceTransformation = SurfaceTransformation(transformationSpec),
-                        text = caption,
-                        onDone = {
-                            translateCaption = it
-                        }
-                    )
-                }
-            }
-
-            // ========== 播放按钮（视频已下载完成时显示） ==========
-            if (videoFileUrl.isNotBlank() && !isDownloading) {
+            // ========== 播放按钮（视频已下载完成 且 已揭示） ==========
+            if (videoFileUrl.isNotBlank() && !isDownloading && (!isSecret || isRevealed)) {
                 item(key = "play_button") {
                     FilledTonalButton(
                         onClick = {
                             if (Config.isNotUseBuiltVideoPlayer) {
-                                // 使用外部播放器
                                 openWithExternalPlayer()
                             } else {
-                                // 使用内置播放器
                                 navController.navigate(Destinations.videoView(videoFileUrl))
                             }
                         },
@@ -587,7 +642,7 @@ fun VideoMessageRenderer(
             }
 
             // 回复按钮
-            item {
+            item(key = "reply") {
                 ReplyMessageButton(
                     modifier = Modifier.transformedHeight(this, transformationSpec),
                     surfaceTransformation = SurfaceTransformation(transformationSpec),
@@ -598,7 +653,7 @@ fun VideoMessageRenderer(
 
             // 删除消息按钮
             if (messageRenderContext.chat != null) {
-                item(key = "Delete") {
+                item(key = "delete") {
                     DeleteMessageButton(
                         modifier = Modifier.transformedHeight(this, transformationSpec),
                         surfaceTransformation = SurfaceTransformation(transformationSpec),
@@ -610,7 +665,7 @@ fun VideoMessageRenderer(
                 }
             }
 
-            item {
+            item(key = "bottom_spacer") {
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }

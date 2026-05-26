@@ -6,6 +6,8 @@ import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.edit
 import com.tgwrist.app.data.ChatFolderInfo
+import com.tgwrist.app.data.ForwardMessage
+import com.tgwrist.app.data.ReplyMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.drinkless.tdlib.TdApi
@@ -14,6 +16,7 @@ object Config {
     // MainActivity 是否存在
     @Volatile
     var isMainActivityAlive: Boolean = false
+    var isMainActivityOnFront: Boolean = false
 
     private const val PREF_NAME = "Config"
 
@@ -53,6 +56,24 @@ object Config {
         set(value) {
             prefs.edit { putBoolean("isNotUseBuiltVideoPlayer", value) }
             _isNotUseBuiltVideoPlayer.value = value
+        }
+
+    // 回复消息信息记录
+    private val _replyMessage = MutableStateFlow<ReplyMessage?>(null)
+    val replyMessageFlow = _replyMessage.asStateFlow()
+    var replyMessage: ReplyMessage?
+        get() = _replyMessage.value
+        set(value) {
+            _replyMessage.value = value
+        }
+
+    // 待转发消息记录
+    private val _forwardMessage = MutableStateFlow<ForwardMessage?>(null)
+    val forwardMessageFlow = _forwardMessage.asStateFlow()
+    var forwardMessage: ForwardMessage?
+        get() = _forwardMessage.value
+        set(value) {
+            _forwardMessage.value = value
         }
 
     // 当前登录用户信息

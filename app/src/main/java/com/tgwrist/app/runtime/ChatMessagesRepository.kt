@@ -1312,6 +1312,62 @@ object ChatMessagesRepository {
                 }
             }
         }
+
+        // 订阅消息反应更新
+        TgClient.subscribe(TdApi.UpdateMessageReactions::class.java) { update ->
+            updateMessageReactions(update)
+        }
+    }
+
+    /**
+     * 某条消息新增反应
+     */
+    private fun updateMessageReactions(update: TdApi.UpdateMessageReactions) {
+        if (!isChatActive(update.chatId)) return
+        scope.launch {
+            _messagesByChat.update { prev ->
+                val current = prev[update.chatId] ?: return@update prev
+                val oldMsg = current[update.messageId] ?: return@update prev
+
+                val oldInteractionInfo = oldMsg.interactionInfo
+                val oldReactionsObj = oldInteractionInfo?.reactions
+
+                // 1. 完整提取旧的反应属性。如果原本是 null（首次添加），则赋予默认值
+                val oldAreTags = oldReactionsObj?.areTags ?: false
+                val oldPaidReactors = oldReactionsObj?.paidReactors ?: emptyArray()
+                val oldCanGetAddedReactions = oldReactionsObj?.canGetAddedReactions ?: false
+
+                // 2. 使用完整的 4 参数构造函数创建全新的 Reactions 对象
+                val newReactionsObj = TdApi.MessageReactions(
+                    update.reactions,            // 从 Update 中带来的最新反应数组
+                    oldAreTags,                  // 保留原状态
+                    oldPaidReactors,             // 保留原状态
+                    oldCanGetAddedReactions      // 保留原状态
+                )
+
+                // 3. 创建全新的 InteractionInfo 对象
+                val newInteractionInfo = if (oldInteractionInfo != null) {
+                    TdApi.MessageInteractionInfo(
+                        oldInteractionInfo.viewCount,
+                        oldInteractionInfo.forwardCount,
+                        oldInteractionInfo.replyInfo,
+                        newReactionsObj
+                    )
+                } else {
+                    // 如果该消息原本完全没有任何互动数据（没被看过、没被转发过、没反应过）
+                    TdApi.MessageInteractionInfo(0, 0, null, newReactionsObj)
+                }
+
+                // 4. 生成新消息并放入 Map
+                val next = oldMsg.copy(interactionInfo = newInteractionInfo)
+
+                val newChatMap = current.toMutableMap().apply {
+                    this[update.messageId] = next
+                }
+
+                prev + (update.chatId to newChatMap.toMap())
+            }
+        }
     }
 
     /**

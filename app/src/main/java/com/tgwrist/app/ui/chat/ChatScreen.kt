@@ -43,6 +43,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.foundation.pager.HorizontalPager
@@ -236,6 +237,10 @@ fun ChatScreen(chatId: Long) {
     val lifecycleOwner = LocalLifecycleOwner.current
     // 是否已恢复滚动位置（防止重复恢复）
     var hasRestoredScroll by remember { mutableStateOf(false) }
+
+    // 媒体选择由 ChatViewModel 持有，跟随当前聊天页生命周期
+    val chatViewModel: ChatViewModel = viewModel { ChatViewModel(chatId) }
+    val mediaChose = chatViewModel.mediaChose
 
     // 多功能按钮配置
     var selecting by remember { mutableStateOf(false) }
@@ -712,7 +717,7 @@ fun ChatScreen(chatId: Long) {
                     }
                     1 -> {
                         AnimatedPage(pageIndex = page, pagerState = pagerState) {
-                            Page1(chatId, chatObject, pagerState)
+                            Page1(chatId, chatObject, mediaChose, pagerState)
                         }
                     }
                     2 -> {

@@ -6,12 +6,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.navigation.NavHostController
+import com.tgwrist.app.data.MediaPickerRequest
 import com.tgwrist.app.data.SharedMessageInfoData
 import com.tgwrist.app.data.SharedMessageInfoKey
 import org.drinkless.tdlib.TdApi
 import java.util.concurrent.atomic.AtomicLong
-import kotlin.collections.getValue
-import kotlin.collections.setValue
 
 /**
  * ChatScreen 实例的唯一标识：chatId + instanceId
@@ -56,6 +55,9 @@ class GlobalAppState {
     // 聊天页面滚动状态缓存 (ChatScreenKey -> scrollState)
     // 使用 ChatScreenKey 而非单纯的 chatId，避免同一 chatId 多次打开时覆盖
     val chatScrollStates = mutableStateMapOf<ChatScreenKey, ChatScrollState>()
+
+    // 媒体选择器请求：跳转到 MediaPickerScreen 前赋值，picker 完成后置空
+    var mediaPickerRequest: MediaPickerRequest? by mutableStateOf(null)
 }
 
 // 创建一个 CompositionLocal，默认抛出错误（强制必须在上层提供）

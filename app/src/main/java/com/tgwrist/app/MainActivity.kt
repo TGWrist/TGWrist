@@ -1,16 +1,21 @@
 package com.tgwrist.app
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -26,14 +31,19 @@ import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavHostState
 import androidx.work.WorkManager
 import com.tgwrist.app.data.SharedMessageInfoKey
-import com.tgwrist.app.data.UserInfoEvent
-import com.tgwrist.app.runtime.ActiveUserSwitch
+import com.tgwrist.app.runtime.CALL_STATE_NONE
 import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.runtime.GlobalEventBus
 import com.tgwrist.app.runtime.OPEN_CALL_PAGE
+import com.tgwrist.app.runtime.TdLibInitManage
+import com.tgwrist.app.runtime.TgCallManager
+import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.runtime.UserManager
 import com.tgwrist.app.ui.AboutScreen
+import com.tgwrist.app.ui.CallScreen
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.IMGViewScreen
+import com.tgwrist.app.ui.MediaPickerScreen
 import com.tgwrist.app.ui.TestScreen
 import com.tgwrist.app.ui.TextViewScreen
 import com.tgwrist.app.ui.VideoPlayerScreen
@@ -46,31 +56,36 @@ import com.tgwrist.app.ui.theme.TGWristTheme
 import com.tgwrist.app.utils.GlobalAppState
 import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.MainViewModel
-import com.tgwrist.app.runtime.TdLibInitManage
-import com.tgwrist.app.runtime.TgClient
-import com.tgwrist.app.runtime.UserManager
-import com.tgwrist.app.ui.CallScreen
 import com.tgwrist.app.utils.WifiNetworkRequester
+import com.tgwrist.app.utils.getAppVersion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.drinkless.tdlib.TdApi
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.core.content.edit
 
 class MainActivity : ComponentActivity() {
+    private lateinit var prefs: SharedPreferences
     private val viewModel: MainViewModel by viewModels()
     private var pendingOpenChatId by mutableLongStateOf(-1L)
+    private var openCallPage by mutableStateOf(false)
     private lateinit var wifiRequester: WifiNetworkRequester // 声明一个 wifiRequester 属性，但不初始化
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingOpenChatId = intent.getLongExtra("chatId", -1L)
+        if (intent.getBooleanExtra("openCallPage", false)) openCallPage = true
     }
 
     override fun onDestroy() {
         Config.isMainActivityAlive = false
-        TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(false)))
-        TgClient.close()
+        Config.isMainActivityOnFront = false
+        // 通话进行中不要把 TDLib 关掉：信令通道一旦断开，VoIP 会话会立刻挂掉
+        if (TgCallManager.callState.value == CALL_STATE_NONE) {
+            TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(false)))
+            TgClient.close()
+        }
         if (::wifiRequester.isInitialized) {
             wifiRequester.release()
         }
@@ -79,21 +94,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        Config.isMainActivityOnFront = false
         TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(false)))
     }
 
     override fun onResume() {
         super.onResume()
+        Config.isMainActivityOnFront = true
         TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(true)))
     }
 
     override fun onStart() {
         super.onStart()
+        Config.isMainActivityOnFront = true
         TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(true)))
     }
 
     override fun onStop() {
         super.onStop()
+        Config.isMainActivityOnFront = false
         TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(false)))
     }
 
@@ -109,8 +128,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         Config.isMainActivityAlive = true
+        Config.isMainActivityOnFront = true
 
         WorkManager.getInstance(this).cancelUniqueWork("notification_processing")
+
+        // 版本更新检查：如果版本更新了，可以在这里执行一些一次性的更新逻辑
+        prefs = getSharedPreferences("MainActivity", MODE_PRIVATE)
+        prefs.getString("appVersion", null)?.let { savedVersion ->
+            if (savedVersion != getAppVersion()) {
+                // 版本更新了
+                prefs.edit {putString("appVersion", getAppVersion())}
+            }
+        } ?: run {
+            // 首次运行，记录版本号
+            prefs.edit {putString("appVersion", getAppVersion())}
+        }
 
         // 获取WiFi权限
         wifiRequester = WifiNetworkRequester(this)
@@ -125,12 +157,20 @@ class MainActivity : ComponentActivity() {
 
         // 赋值传入的chatId
         pendingOpenChatId = intent?.getLongExtra("chatId", -1L) ?: -1L
+        openCallPage = intent?.getBooleanExtra("openCallPage", false) ?: false
+
+        // 让 Activity 能够在锁屏上显示，并点亮手表的屏幕
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
 
         setContent {
             //val coroutineScope = rememberCoroutineScope()
             val navController = rememberSwipeDismissableNavController()
             val swipeState = rememberSwipeDismissableNavHostState()
             val lifecycleOwner = LocalLifecycleOwner.current
+            val isCalling by TgCallManager.callState.collectAsState()
 
             // 初始化“数据共享区域”
             val appState = remember { GlobalAppState() }
@@ -140,6 +180,19 @@ class MainActivity : ComponentActivity() {
 
             // 获取是否打开预先传入会话
             var consumedChatId by rememberSaveable { mutableLongStateOf(-1L) }
+
+            LaunchedEffect(isCalling) {
+                // 通话进行中：保持屏幕常亮、允许锁屏上方显示并点亮屏幕，方便用户随时操作
+                // 非通话状态：移除这些标志，遵循正常的息屏 / 锁屏行为
+                val flags = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                if (isCalling != CALL_STATE_NONE) {
+                    window.addFlags(flags)
+                } else {
+                    window.clearFlags(flags)
+                }
+            }
 
             LaunchedEffect(pendingOpenChatId, userInfo) {
                 val chatId = pendingOpenChatId
@@ -164,6 +217,17 @@ class MainActivity : ComponentActivity() {
                     while (isActive) {
                         delay(10000.milliseconds)
                         TgClient.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(true)))
+                    }
+                }
+            }
+
+            LaunchedEffect(openCallPage) {
+                if (openCallPage) {
+                    openCallPage = false
+                    intent.removeExtra("openCallPage")
+                    navController.navigate(Destinations.CALL) {
+                        // 如果目标页面已经在栈顶，则不会重新创建和打开新页面
+                        launchSingleTop = true
                     }
                 }
             }
@@ -297,6 +361,11 @@ class MainActivity : ComponentActivity() {
                             // 通话页面
                             composable(Destinations.CALL) {
                                 CallScreen()
+                            }
+
+                            // 媒体选择器
+                            composable(Destinations.MEDIA_PICKER) {
+                                MediaPickerScreen()
                             }
 
                             // 测试页面

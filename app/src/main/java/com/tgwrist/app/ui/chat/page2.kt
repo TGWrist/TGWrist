@@ -1,6 +1,8 @@
 package com.tgwrist.app.ui.chat
 
 import android.widget.Toast
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -12,12 +14,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +41,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
+import androidx.wear.compose.material3.AlertDialog
+import androidx.wear.compose.material3.AlertDialogDefaults
+import androidx.wear.compose.material3.ButtonDefaults
+import androidx.wear.compose.material3.EdgeButton
+import androidx.wear.compose.material3.EdgeButtonSize
+import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
+import androidx.wear.compose.material3.RadioButton
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
@@ -44,10 +57,11 @@ import androidx.wear.compose.material3.TitleCard
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
-import com.tgwrist.app.ui.Destinations
-import com.tgwrist.app.ui.main.ThumbnailChatPhoto
-import com.tgwrist.app.utils.LocalGlobalAppState
+import com.tgwrist.app.data.AlertDialogItem
 import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.ui.Destinations
+import com.tgwrist.app.ui.ThumbnailChatPhoto
+import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.dateTimeUserPref
 import com.tgwrist.app.utils.setClipboardText
 import kotlinx.coroutines.CoroutineScope
@@ -65,8 +79,18 @@ fun Page2(chatObject: TdApi.Chat?) {
     val navController = appState.navController
     val listState = rememberTransformingLazyColumnState()
     val overscroll = rememberOverscrollEffect()
+    val coroutineScope = rememberCoroutineScope()
     val transformationSpec = rememberTransformationSpec()
     val density = LocalDensity.current
+
+    // Dialog 相关
+    var isShowDialog by remember { mutableStateOf(false) }
+    var dialogItem by remember { mutableStateOf(AlertDialogItem()) }
+
+    // 删除聊天对话框：删除模式与"为所有人删除"开关
+    // deleteMode: 0 = 仅能为自己删除, 1 = 仅能为所有人删除, 2 = 用户可选
+    var deleteMode by remember { mutableIntStateOf(0) }
+    val isRevokeState = remember { mutableStateOf(false) }
 
     // 字符串资源（在 Composable 上下文中获取）
     val copiedClipboard = stringResource(id = R.string.Copied_clipboard)
@@ -84,6 +108,18 @@ fun Page2(chatObject: TdApi.Chat?) {
     val strMember = stringResource(id = R.string.Member)
     val strSubscribers = stringResource(id = R.string.Subscribers)
     val strSecretChat = stringResource(id = R.string.Secret_Chat)
+
+    // 删除聊天相关文本
+    val strDeleteUserTitle = stringResource(id = R.string.Delete_chat_user_title)
+    val strDeleteUserMessage = stringResource(id = R.string.Delete_chat_user_message)
+    val strDeleteGroupTitle = stringResource(id = R.string.Delete_chat_group_title)
+    val strDeleteGroupMessage = stringResource(id = R.string.Delete_chat_group_message)
+    val strDeleteChannelTitle = stringResource(id = R.string.Delete_chat_channel_title)
+    val strDeleteChannelMessage = stringResource(id = R.string.Delete_chat_channel_message)
+    val strDeleteChatFailed = stringResource(id = R.string.Delete_chat_failed)
+    val strDeleteForEveryone = stringResource(id = R.string.Delete_for_everyone)
+    val strDeleteForMeOnly = stringResource(id = R.string.Delete_for_me_only)
+    val strDeleteForEveryoneOnly = stringResource(id = R.string.Delete_for_everyone_only)
 
     val strActionTyping = stringResource(id = R.string.action_typing)
     val strActionRecordingVideo = stringResource(id = R.string.action_recording_video)
@@ -457,9 +493,195 @@ fun Page2(chatObject: TdApi.Chat?) {
     }
 
     // ============ UI ============
+    // Dialog 提示
+    AlertDialog(
+        visible = isShowDialog,
+        onDismissRequest = {
+            dialogItem.onDismissRequest()
+            isShowDialog = false
+        },
+        confirmButton = {
+            AlertDialogDefaults.ConfirmButton(
+                onClick = {
+                    dialogItem.confirmButton()
+                    isShowDialog = false
+                }
+            )
+        },
+        title = dialogItem.title,
+        modifier = dialogItem.modifier,
+        icon = dialogItem.icon,
+        text = dialogItem.text,
+        verticalArrangement = dialogItem.verticalArrangement,
+        contentPadding = dialogItem.contentPadding ?: if (dialogItem.icon != null) {
+            AlertDialogDefaults.confirmDismissWithIconContentPadding()
+        } else {
+            AlertDialogDefaults.confirmDismissContentPadding()
+        },
+        properties = dialogItem.properties,
+        content = dialogItem.content,
+    )
     ScreenScaffold(
         scrollState = listState,
         overscrollEffect = overscroll,
+        edgeButton = {
+            EdgeButton(
+                onClick = {
+                    val chatType = chatObject?.type
+                    // 根据 chat 类型准备对话框文本
+                    val (dlgTitle, dlgMessage) = when (chatType) {
+                        is TdApi.ChatTypePrivate,
+                        is TdApi.ChatTypeSecret -> strDeleteUserTitle to strDeleteUserMessage
+                        is TdApi.ChatTypeSupergroup -> {
+                            if (chatType.isChannel) {
+                                strDeleteChannelTitle to strDeleteChannelMessage
+                            } else {
+                                strDeleteGroupTitle to strDeleteGroupMessage
+                            }
+                        }
+                        is TdApi.ChatTypeBasicGroup -> strDeleteGroupTitle to strDeleteGroupMessage
+                        else -> strDeleteUserTitle to strDeleteUserMessage
+                    }
+
+                    // 计算 deleteMode：由 chat 自身能力字段决定
+                    // 0 = 仅能为自己删除, 1 = 仅能为所有人删除, 2 = 用户可选
+                    val canForAll = chatObject?.canBeDeletedForAllUsers == true
+                    val canForSelf = chatObject?.canBeDeletedOnlyForSelf == true
+                    deleteMode = when {
+                        canForAll && canForSelf -> 2
+                        canForAll -> 1
+                        else -> 0
+                    }
+                    // 默认值：仅能为所有人删除时为 true；其他默认 false
+                    isRevokeState.value = deleteMode == 1
+
+                    dialogItem = AlertDialogItem(
+                        title = { Text(dlgTitle) },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Delete"
+                            )
+                        },
+                        text = { Text(dlgMessage) },
+                        content = {
+                            when (deleteMode) {
+                                0 -> {
+                                    // 仅能为自己删除
+                                    item {
+                                        Text(
+                                            text = strDeleteForMeOnly,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 8.dp)
+                                        )
+                                    }
+                                }
+                                1 -> {
+                                    // 仅能为所有人删除
+                                    item {
+                                        Text(
+                                            text = strDeleteForEveryoneOnly,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 8.dp)
+                                        )
+                                    }
+                                }
+                                2 -> {
+                                    // 用户可选：勾选则为所有人删除
+                                    item {
+                                        RadioButton(
+                                            selected = isRevokeState.value,
+                                            onSelect = {
+                                                isRevokeState.value = !isRevokeState.value
+                                            },
+                                            label = {
+                                                Text(strDeleteForEveryone)
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            val c = chatObject ?: return@AlertDialogItem
+                            // revoke 由 deleteMode 与开关共同决定
+                            val revoke = when (deleteMode) {
+                                1 -> true
+                                2 -> isRevokeState.value
+                                else -> false
+                            }
+                            val handler: (TdApi.Object) -> Unit = { result ->
+                                if (result is TdApi.Ok) {
+                                    // 删除成功，关闭当前页面
+                                    coroutineScope.launch {
+                                        navController?.popBackStack()
+                                    }
+                                } else {
+                                    coroutineScope.launch {
+                                        Toast.makeText(context, strDeleteChatFailed, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                            when (c.type) {
+                                is TdApi.ChatTypePrivate,
+                                is TdApi.ChatTypeSecret -> {
+                                    // 私人/秘密聊天：删除历史并从列表移除
+                                    TgClient.send(
+                                        TdApi.DeleteChatHistory(c.id, true, revoke),
+                                        handler
+                                    )
+                                }
+                                is TdApi.ChatTypeBasicGroup,
+                                is TdApi.ChatTypeSupergroup -> {
+                                    if (c.canBeDeletedForAllUsers && revoke) {
+                                        // 有权限且选择为所有人删除：直接删除整个群组
+                                        TgClient.send(TdApi.DeleteChat(c.id), handler)
+                                    } else {
+                                        // 其他情况：退出群组/频道，随后删除本地历史
+                                        TgClient.send(TdApi.LeaveChat(c.id)) { leaveResult ->
+                                            if (leaveResult is TdApi.Ok) {
+                                                TgClient.send(
+                                                    TdApi.DeleteChatHistory(c.id, true, revoke),
+                                                    handler
+                                                )
+                                            } else {
+                                                handler(leaveResult)
+                                            }
+                                        }
+                                    }
+                                }
+                                else -> {
+                                    coroutineScope.launch {
+                                        Toast.makeText(context, strDeleteChatFailed, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    isShowDialog = true
+                },
+                buttonSize = EdgeButtonSize.Medium,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF58B81)),
+                modifier =
+                    // 如果用户开始从EdgeButton滚动
+                    Modifier.scrollable(
+                        listState,
+                        orientation = Orientation.Vertical,
+                        reverseDirection = true,
+                        // 应对EdgeButton应用超滚动效果以适当调整滚动行为
+                        overscrollEffect = overscroll,
+                    ),
+            ) {
+                Icon(Icons.Rounded.Delete, contentDescription = "Delete")
+            }
+        },
         modifier = Modifier.fillMaxSize()
     ) { contentPadding ->
         TransformingLazyColumn(
@@ -692,10 +914,7 @@ fun Page2(chatObject: TdApi.Chat?) {
                             Text(stringResource(id = R.string.Description), fontSize = 12.sp, color = Color(0xFFC9C3CF))
                         },
                         onClick = {},
-                        onLongClick = {
-                            context.setClipboardText(groupDescription ?: "", "Description")
-                            Toast.makeText(context, copiedClipboard, Toast.LENGTH_SHORT).show()
-                        },
+                        onLongClick = {},
                         transformation = SurfaceTransformation(transformationSpec),
                         modifier = Modifier
                             .fillMaxWidth()

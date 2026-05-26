@@ -3,11 +3,18 @@ package com.tgwrist.app.ui.message.info.message.factory
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import com.tgwrist.app.data.AlertDialogItem
+import com.tgwrist.app.ui.message.info.message.renderer.AnimatedEmojiMessageRenderer
+import com.tgwrist.app.ui.message.info.message.renderer.AnimationMessageRenderer
+import com.tgwrist.app.ui.message.info.message.renderer.AudioMessageRenderer
+import com.tgwrist.app.ui.message.info.message.renderer.CallMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.DocumentMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.PhotoMessageRenderer
+import com.tgwrist.app.ui.message.info.message.renderer.StickerMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.TextMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.UnknownMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.VideoMessageRenderer
+import com.tgwrist.app.ui.message.info.message.renderer.VideoNoteMessageRenderer
+import com.tgwrist.app.ui.message.info.message.renderer.VoiceNoteMessageRenderer
 import org.drinkless.tdlib.TdApi
 import kotlin.reflect.KClass
 
@@ -45,6 +52,34 @@ object MessageContentFactory {
         // 注册文件
         register<TdApi.MessageDocument> { content, messageRenderContext ->
             DocumentMessageRenderer(content, messageRenderContext)
+        },
+        // 注册动画 emoji
+        register<TdApi.MessageAnimatedEmoji> { content, messageRenderContext ->
+            AnimatedEmojiMessageRenderer(content, messageRenderContext)
+        },
+        // 注册贴纸
+        register<TdApi.MessageSticker> { content, messageRenderContext ->
+            StickerMessageRenderer(content, messageRenderContext)
+        },
+        // 注册语音消息
+        register<TdApi.MessageVoiceNote> { content, messageRenderContext ->
+            VoiceNoteMessageRenderer(content, messageRenderContext)
+        },
+        // 注册通话消息
+        register<TdApi.MessageCall> { content, messageRenderContext ->
+            CallMessageRenderer(content, messageRenderContext)
+        },
+        // 注册动画 (GIF / MP4)
+        register<TdApi.MessageAnimation> { content, messageRenderContext ->
+            AnimationMessageRenderer(content, messageRenderContext)
+        },
+        // 注册圆形视频留言
+        register<TdApi.MessageVideoNote> { content, messageRenderContext ->
+            VideoNoteMessageRenderer(content, messageRenderContext)
+        },
+        // 注册音频文件
+        register<TdApi.MessageAudio> { content, messageRenderContext ->
+            AudioMessageRenderer(content, messageRenderContext)
         }
     )
 

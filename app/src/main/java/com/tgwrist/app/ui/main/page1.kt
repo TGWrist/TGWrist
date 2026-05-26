@@ -77,6 +77,7 @@ import com.tgwrist.app.utils.MainViewModel
 import com.tgwrist.app.runtime.SWITCHING_CHAT_LIST
 import com.tgwrist.app.runtime.TgCallManager
 import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.ui.ThumbnailChatPhoto
 import com.tgwrist.app.utils.formatChatTimestamp
 import com.tgwrist.app.utils.handleAllMessages
 import kotlinx.coroutines.delay

@@ -30,6 +30,7 @@ import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
+import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.TranslationButton
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import org.drinkless.tdlib.TdApi
@@ -103,6 +104,13 @@ fun TextMessageRenderer(
                 onDone = {
                     translatedText = it
                 }
+            )
+
+            // 回复按钮
+            ReplyMessageButton(
+                modifier = Modifier.padding(top = 8.dp),
+                properties = messageRenderContext.properties,
+                message = messageRenderContext.message
             )
 
             // 删除按钮

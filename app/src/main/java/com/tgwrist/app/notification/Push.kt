@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -78,6 +79,26 @@ object Push {
     private val chatMetas = ConcurrentHashMap<Long, ChatMeta>()
     // tdNotificationId → chatId（用于 removedNotificationIds 反查）
     private val notifIdToChatId = ConcurrentHashMap<Int, Long>()
+    private val callNotifIdToChatId = ConcurrentHashMap<Int, Long>()
+    @Volatile
+    private var callForegroundNotificationActive = false
+    /** IncomingCallNotificationService 运行期间为 true，抑制 Push 里的来电通知重复弹出 */
+    @Volatile
+    private var incomingCallServiceActive = false
+
+    /**
+     * FIX: 最近一次"已实际弹出来电通知"的时间戳（SystemClock.elapsedRealtime）。
+     *
+     * 用途：[NotificationBackgroundWorker] 处理 push 后，可能存在
+     * "通知已经弹了，但 TgCallManager.callState 还没来得及切到非 NONE" 的窗口。
+     * Worker 用这个时间戳决定是否再宽限一会儿，避免提前关掉 TgClient 导致来电丢失。
+     *
+     * 仅在真正调用 nm.notify(...) 后才更新；前台服务接管 / 抑制分支不更新。
+     * 为 0L 表示尚未发布过。
+     */
+    @Volatile
+    var lastIncomingCallNotificationAt: Long = 0L
+        private set
 
     // ======================================================================
     // 入口
@@ -86,6 +107,37 @@ object Push {
     fun init() {
         createNotificationChannels()
         subscribeNotificationGroup()
+    }
+
+    fun setCallForegroundNotificationActive(context: Context, active: Boolean) {
+        callForegroundNotificationActive = active
+        if (active) {
+            // CallForegroundService（有麦克风权限）已接管，两种来电通知都清掉
+            incomingCallServiceActive = false
+            cancelIncomingCallNotifications(context)
+        }
+    }
+
+    /**
+     * 由 [com.tgwrist.app.IncomingCallNotificationService] 调用。
+     * active=true  → 前台服务通知已展示，Push 不再重复弹来电通知。
+     * active=false → 服务已停止，恢复正常。
+     */
+    fun setIncomingCallServiceActive(context: Context, active: Boolean) {
+        incomingCallServiceActive = active
+        if (!active) {
+            // 服务停止时顺手清掉可能残留的来电通知
+            cancelIncomingCallNotifications(context)
+        }
+    }
+
+    fun cancelIncomingCallNotifications(context: Context) {
+        val nm = NotificationManagerCompat.from(context)
+        val chatIds = callNotifIdToChatId.values.toSet()
+        for (chatId in chatIds) {
+            nm.cancel(chatIdToCallNotifId(chatId))
+        }
+        callNotifIdToChatId.clear()
     }
 
     // ======================================================================
@@ -121,64 +173,116 @@ object Push {
                 val context = TGWrist.context
                 val nm = NotificationManagerCompat.from(context)
                 var needRebuild = false
+                val isCallGroup = update.type is TdApi.NotificationGroupTypeCalls
 
                 // ── 1. 处理移除 ──
-                for (id in update.removedNotificationIds) {
-                    val cid = notifIdToChatId.remove(id)
-                    if (cid != null) {
-                        chatMessages[cid]?.removeAll { it.notificationId == id }
-                        if (cid == chatId) needRebuild = true
+                if (isCallGroup) {
+                    handleRemovedCallNotifications(
+                        nm = nm,
+                        chatId = chatId,
+                        removedNotificationIds = update.removedNotificationIds,
+                        willShowReplacement = update.addedNotifications.isNotEmpty(),
+                    )
+                } else {
+                    for (id in update.removedNotificationIds) {
+                        val cid = notifIdToChatId.remove(id)
+                        if (cid != null) {
+                            chatMessages[cid]?.removeAll { it.notificationId == id }
+                            if (cid == chatId) needRebuild = true
+                        }
                     }
                 }
 
                 // ── 2. 处理新增 ──
                 if (update.addedNotifications.isNotEmpty()) {
                     // 确保 ChatMeta 存在（首次为该 chat 创建）
-                    if (!chatMetas.containsKey(chatId)) {
-                        val chat = awaitChat(chatId)
-                        val chatTitle = chat?.title ?: "Chat"
-                        val isGroup = chat?.type is TdApi.ChatTypeBasicGroup
-                                || chat?.type is TdApi.ChatTypeSupergroup
-                        val chatIconBitmap = chat?.let { loadChatIcon(it) }
-                        val channelId = channelForGroupType(update.type)
-                        chatMetas[chatId] = ChatMeta(chatTitle, isGroup, chatIconBitmap, channelId, update.notificationGroupId)
-                    }
-
-                    val meta = chatMetas[chatId]!!
-                    val list = chatMessages.getOrPut(chatId) {
-                        mutableListOf()
-                    }
-
-                    for (notification in update.addedNotifications) {
-                        val content = resolveContent(notification.type, chatId)
-                        val senderIcon = if (meta.isGroup) {
-                            resolveSenderIcon(notification.type)
-                        } else null
-
-                        val personBuilder = Person.Builder()
-                            .setName(content.senderName)
-                            .setKey(extractSenderKey(notification.type))
-                        senderIcon?.let { personBuilder.setIcon(it) }
-
-                        list.add(
-                            CachedMessage(
-                                notificationId = notification.id,
-                                person         = personBuilder.build(),
-                                text           = content.text,
-                                timestamp      = notification.date.toLong() * 1000,
-                                isOutgoing     = content.isOutgoing,
-                                isSilent       = notification.isSilent,
-                            )
+                    if (isCallGroup) {
+                        // 来电走专属通知：fullScreenIntent + 同 PendingIntent + Open 动作
+                        // 不缓存到 chatMessages，避免和文本消息合并
+                        showIncomingCallNotifications(
+                            context = context,
+                            nm = nm,
+                            chatId = chatId,
+                            notifications = update.addedNotifications,
+                            notificationGroupId = update.notificationGroupId,
                         )
-                        notifIdToChatId[notification.id] = chatId
+                    } else {
+                        if (!chatMetas.containsKey(chatId)) {
+                            val chat = awaitChat(chatId)
+                            val chatTitle = chat?.title ?: "Chat"
+                            val isGroup = chat?.type is TdApi.ChatTypeBasicGroup
+                                    || chat?.type is TdApi.ChatTypeSupergroup
+                            val chatIconBitmap = chat?.let { loadChatIcon(it) }
+                            val channelId = channelForGroupType(update.type)
+                            chatMetas[chatId] = ChatMeta(chatTitle, isGroup, chatIconBitmap, channelId, update.notificationGroupId)
+                        }
+
+                        val meta = chatMetas[chatId]!!
+                        val list = chatMessages.getOrPut(chatId) {
+                            mutableListOf()
+                        }
+
+                        for (notification in update.addedNotifications) {
+                            val content = resolveContent(notification.type, chatId)
+                            val senderIcon = if (meta.isGroup) {
+                                resolveSenderIcon(notification.type)
+                            } else null
+
+                            val personBuilder = Person.Builder()
+                                .setName(content.senderName)
+                                .setKey(extractSenderKey(notification.type))
+                            senderIcon?.let { personBuilder.setIcon(it) }
+
+                            list.add(
+                                CachedMessage(
+                                    notificationId = notification.id,
+                                    person         = personBuilder.build(),
+                                    text           = content.text,
+                                    timestamp      = notification.date.toLong() * 1000,
+                                    isOutgoing     = content.isOutgoing,
+                                    isSilent       = notification.isSilent,
+                                )
+                            )
+                            notifIdToChatId[notification.id] = chatId
+                        }
+                        needRebuild = true
                     }
-                    needRebuild = true
                 }
 
                 // ── 3. 重建该 chat 的通知 ──
-                if (needRebuild) {
+                if (!isCallGroup && needRebuild) {
                     rebuildChatNotification(context, nm, chatId)
                 }
+            }
+        }
+    }
+
+    private fun handleRemovedCallNotifications(
+        nm: NotificationManagerCompat,
+        chatId: Long,
+        removedNotificationIds: IntArray,
+        willShowReplacement: Boolean,
+    ) {
+        if (removedNotificationIds.isEmpty()) return
+
+        var removedCurrentCall = false
+        for (id in removedNotificationIds) {
+            val removedChatId = callNotifIdToChatId.remove(id)
+            if (removedChatId == null || removedChatId == chatId) {
+                removedCurrentCall = true
+            }
+        }
+
+        if (!willShowReplacement && removedCurrentCall) {
+            clearCallNotificationMappings(chatId)
+            nm.cancel(chatIdToCallNotifId(chatId))
+        }
+    }
+
+    private fun clearCallNotificationMappings(chatId: Long) {
+        for ((notificationId, mappedChatId) in callNotifIdToChatId) {
+            if (mappedChatId == chatId) {
+                callNotifIdToChatId.remove(notificationId, mappedChatId)
             }
         }
     }
@@ -388,12 +492,105 @@ object Push {
     }
 
     // ======================================================================
+    // 来电专属通知：高优先级 + fullScreenIntent，并提供"打开"动作直接进入通话页
+    // ======================================================================
+
+    @SuppressLint("MissingPermission")
+    private suspend fun showIncomingCallNotifications(
+        context: Context,
+        nm: NotificationManagerCompat,
+        chatId: Long,
+        notifications: Array<TdApi.Notification>,
+        notificationGroupId: Int,
+    ) {
+        if (callForegroundNotificationActive || incomingCallServiceActive) return
+
+        // 解析对端：私聊场景下 chatId 直接对应用户 chat
+        val chat = awaitChat(chatId)
+        if (callForegroundNotificationActive || incomingCallServiceActive) return
+
+        val callerName = chat?.title?.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.Call)
+        val callerIcon = chat?.let { loadChatIcon(it) }
+        val notifId = chatIdToCallNotifId(chatId)
+
+        // 拉起通话页：和 CallForegroundService / MainActivity 已有路径保持一致
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("openCallPage", true)
+        }
+        val openPending = PendingIntent.getActivity(
+            context,
+            notifId,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        // 滑动清除时通知 TDLib
+        val maxNotifId = notifications.maxOfOrNull { it.id } ?: 0
+        val deleteIntent = Intent(context, NotificationDismissReceiver::class.java).apply {
+            action = ACTION_DISMISS_NOTIFICATION
+            putExtra(NOTIFICATION_GROUP_ID, notificationGroupId)
+            putExtra(NOTIFICATION_ID, maxNotifId)
+        }
+        val deletePending = PendingIntent.getBroadcast(
+            context,
+            notifId,
+            deleteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_CALLS)
+            .setSmallIcon(R.drawable.airplane_logo_white)
+            .setContentTitle(callerName)
+            .setContentText(context.getString(R.string.Incoming_call))
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setContentIntent(openPending)
+            .setDeleteIntent(deletePending)
+            // 尽量直接拉起通话页（息屏 / 锁屏也尝试）
+            .setFullScreenIntent(openPending, true)
+
+        callerIcon?.let { builder.setLargeIcon(it) }
+
+        // 把所有 TDLib notification id 都映射到本通知，方便 removed 时清理
+        for (n in notifications) {
+            callNotifIdToChatId[n.id] = chatId
+        }
+
+        if (callForegroundNotificationActive || incomingCallServiceActive) {
+            clearCallNotificationMappings(chatId)
+            return
+        }
+
+        try {
+            nm.notify(notifId, builder.build())
+            // FIX: 通知已实际弹出。更新时间戳，让 NotificationBackgroundWorker 把
+            // 自己再多挂一会儿，给 TgCallManager.callState 真正切到非 NONE 留出窗口。
+            lastIncomingCallNotificationAt = SystemClock.elapsedRealtime()
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Missing POST_NOTIFICATIONS permission", e)
+        }
+    }
+
+    // ======================================================================
     // chatId → 安卓通知 ID（Long → 正 Int，避免与 SUMMARY_NOTIFICATION_ID 冲突）
     // ======================================================================
 
     private fun chatIdToNotifId(chatId: Long): Int {
         val id = (chatId xor (chatId ushr 32)).toInt() and 0x7FFFFFFE
         return if (id == 0) 1 else id
+    }
+
+    private fun chatIdToCallNotifId(chatId: Long): Int {
+        val chatNotifId = chatIdToNotifId(chatId)
+        val id = if (chatNotifId == 1) 3 else chatNotifId or 1
+        return if (id == Int.MAX_VALUE) SUMMARY_NOTIFICATION_ID - 1 else id
     }
 
     // ======================================================================

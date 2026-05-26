@@ -46,6 +46,7 @@ import com.tgwrist.app.R
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.runtime.Config.connectionState
+import com.tgwrist.app.ui.ThumbnailChatPhoto
 import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.setClipboardText
 
@@ -120,7 +121,8 @@ internal fun Page2() {
                             horizontalAlignment = Alignment.CenterHorizontally  // 水平居中
                         ) {
                             ThumbnailChatPhoto(
-                                thumbnail = currentUser?.profilePhoto?.big ?: currentUser?.profilePhoto?.small,
+                                thumbnail = currentUser?.profilePhoto?.big
+                                    ?: currentUser?.profilePhoto?.small,
                                 title = "${currentUser?.firstName} ${currentUser?.lastName}",
                                 accentColorId = currentUser!!.accentColorId,
                                 contentDescription = "Chat Photo",
