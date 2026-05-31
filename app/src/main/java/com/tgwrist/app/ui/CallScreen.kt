@@ -221,7 +221,7 @@ fun CallScreen() {
                 maxVolume = uiState.maxCallVolume,
                 audioOutput = uiState.audioOutput,
                 onVolumeChange = { TgCallManager.setCallVolume(it) },
-                onToggleAudioOutput = { TgCallManager.requestSwitchAudioOutput(context) },
+                onToggleAudioOutput = { TgCallManager.requestSwitchAudioOutput() },
             )
         }
         ScreenScaffold(Modifier.fillMaxSize()) { contentPadding ->

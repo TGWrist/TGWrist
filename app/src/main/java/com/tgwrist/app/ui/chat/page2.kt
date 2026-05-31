@@ -913,7 +913,9 @@ fun Page2(chatObject: TdApi.Chat?) {
                         title = {
                             Text(stringResource(id = R.string.Description), fontSize = 12.sp, color = Color(0xFFC9C3CF))
                         },
-                        onClick = {},
+                        onClick = {
+                            navController?.navigate(Destinations.textView(groupDescription ?: ""))
+                        },
                         onLongClick = {},
                         transformation = SurfaceTransformation(transformationSpec),
                         modifier = Modifier

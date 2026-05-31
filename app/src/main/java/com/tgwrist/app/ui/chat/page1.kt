@@ -790,7 +790,7 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                     }
 
                     // Emoji
-                    FilledIconButton(
+                    /*FilledIconButton(
                         onClick = {
                             // TODO
                         },
@@ -807,7 +807,7 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                             imageVector = Icons.Rounded.Mood,
                             contentDescription = "Emoji"
                         )
-                    }
+                    }*/
                 }
             }
 

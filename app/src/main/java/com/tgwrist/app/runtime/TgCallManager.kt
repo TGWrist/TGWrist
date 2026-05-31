@@ -1,10 +1,10 @@
 package com.tgwrist.app.runtime
 
-import android.content.ComponentName
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Context.AUDIO_SERVICE
 import android.content.Intent
-import android.content.pm.ApplicationInfo
+import android.content.IntentFilter
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -61,13 +61,8 @@ const val CALL_STATUS_ERROR = 7
 
 object TgCallManager {
     private const val TAG = "TgCallManager"
-
-    // Horologist OutputSwitcher 用的常量；AndroidX 没有公开符号，这里硬编码
-    private const val MEDIA_OUTPUT_PANEL_ACTION =
-        "com.android.settings.panel.action.MEDIA_OUTPUT"
-    private const val MEDIA_OUTPUT_PANEL_EXTRA_PACKAGE_NAME =
-        "com.android.settings.panel.extra.PACKAGE_NAME"
-
+    /** 音频输出切换的防抖窗口:窗口内的连点会被忽略,避免反复折腾 SCO 链路 */
+    private const val SWITCH_DEBOUNCE_MS = 600L
     private lateinit var audioManager: AudioManager
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -77,6 +72,11 @@ object TgCallManager {
     private var callId = 0
     /** 正在查询的 peerUserId，避免同一个 call 重复发 GetUser */
     private var loadedPeerUserId: Long = 0L
+
+    /** 上次音频输出切换被接受的时间戳,用于点击防抖 */
+    private var lastAudioOutputSwitchAt: Long = 0L
+    /** 切换后的兜底 refresh 任务,新切换发起时会取消旧的,避免旧值盖掉新乐观状态 */
+    private var pendingAudioRefreshJob: Job? = null
 
     private val _uiState = MutableStateFlow(CallUiState())
     val uiState = _uiState.asStateFlow()
@@ -121,10 +121,22 @@ object TgCallManager {
      * API 31+ 优先使用 [AudioManager.getCommunicationDevice]，老设备退回到
      * 历史 API（[AudioManager.isBluetoothScoOn]、[AudioManager.isWiredHeadsetOn]
      * 与 [AudioManager.isSpeakerphoneOn]）。
+     *
+     * 顺手把通话音量一并刷新:STREAM_VOICE_CALL 在不同物理输出上各自维护一份音量,
+     * 系统切完路由后返回的已经是新设备对应的音量了,UI 必须同步,否则会出现"切到
+     * 蓝牙耳机后音量条还停留在扬声器档位"的错位。
      */
     fun refreshAudioOutput() {
         if (!::audioManager.isInitialized) return
-        _uiState.update { it.copy(audioOutput = currentAudioOutput()) }
+        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+        val cur = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
+        _uiState.update {
+            it.copy(
+                audioOutput = currentAudioOutput(),
+                callVolume = cur,
+                maxCallVolume = max,
+            )
+        }
     }
 
     private fun currentAudioOutput(): AudioOutputDevice {
@@ -156,79 +168,72 @@ object TgCallManager {
     /**
      * 让用户切换通话音频输出。
      *
-     * - Wear OS 5 / Android 14+ 等支持系统“媒体输出切换器”的机型：解析系统级
-     *   `com.android.settings.panel.action.MEDIA_OUTPUT` 面板组件并显式启动，
-     *   这是官方推荐的输出选择 UI（参考 Horologist `OutputSwitcher`）。
-     * - 系统未提供该面板：回退到手动两态切换（扬声器 ↔ 蓝牙 / 有线 / 听筒）。
+     * 物理路由切换是异步的（蓝牙 SCO 链路建立尤其慢），切完立刻 `refreshAudioOutput()`
+     * 拿到的多半还是旧值。所以这里做"乐观更新"：先按预测的目标 UI 状态推一次,真正
+     * 的最终态由 [communicationDeviceListener] / [audioDeviceCallback] / [scoReceiver]
+     * 异步回调时再 [refreshAudioOutput] 校正。
+     *
+     * 同时做两层抖动消除:
+     *  1. 短时间(< [SWITCH_DEBOUNCE_MS]ms)内的连点直接忽略。频繁切换会让蓝牙 SCO 反复
+     *     建立 / 断开,系统底层很容易卡住或出现奇怪中间态。
+     *  2. 每次切换会启动一个 [pendingAudioRefreshJob] 在 1.5s 后兜底 refresh,新切换
+     *     来时取消旧 job。否则旧 job 会拿着旧路由值盖掉新乐观状态,UI 又跳回去。
      */
-    fun requestSwitchAudioOutput(context: Context) {
+    fun requestSwitchAudioOutput() {
         if (!::audioManager.isInitialized) return
-        if (launchSystemMediaOutputSwitcher(context)) {
-            // 系统面板会异步切换路由，这里立刻刷一次只是同步当前值；真正的更新由
-            // AudioDeviceCallback / OnCommunicationDeviceChangedListener 推送。
-            refreshAudioOutput()
+
+        val now = System.currentTimeMillis()
+        if (now - lastAudioOutputSwitchAt < SWITCH_DEBOUNCE_MS) {
+            Log.d(TAG, "audio output switch ignored (debounce)")
             return
         }
-        toggleAudioOutputManually()
-        refreshAudioOutput()
-    }
 
-    /**
-     * 尝试启动系统媒体输出切换器面板。返回 true 表示已成功 startActivity。
-     *
-     * 只接受系统应用 / 系统更新过的应用提供的面板，避免被第三方 App 抢响应。
-     */
-    private fun launchSystemMediaOutputSwitcher(context: Context): Boolean {
-        val intent = Intent(MEDIA_OUTPUT_PANEL_ACTION)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            .putExtra(MEDIA_OUTPUT_PANEL_EXTRA_PACKAGE_NAME, context.packageName)
-        val component = resolveSystemComponent(context, intent) ?: return false
-        intent.component = component
-        return try {
-            context.startActivity(intent)
-            true
-        } catch (e: Throwable) {
-            Log.w(TAG, "Launch system media output switcher failed", e)
-            false
-        }
-    }
+        // 在还没进入通话音频模式时,setCommunicationDevice / startBluetoothSco 大概率会被
+        // 系统忽略。这里兜底把 mode 调过去,保证用户在等待接听阶段也能切到蓝牙耳机。
+        ensureCommunicationMode()
 
-    private fun resolveSystemComponent(context: Context, intent: Intent): ComponentName? {
-        val pm = context.packageManager
-        val resolveInfos = pm.queryIntentActivities(intent, 0)
-        val systemFlags = ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP
-        for (info in resolveInfos) {
-            val activity = info.activityInfo ?: continue
-            val app = activity.applicationInfo ?: continue
-            if (app.flags and systemFlags != 0) {
-                return ComponentName(activity.packageName, activity.name)
-            }
-        }
-        return null
-    }
-
-    /**
-     * 在“扬声器”和“非扬声器”之间手动切换：当前是扬声器就切到耳机/蓝牙/听筒；
-     * 当前不是扬声器就切回扬声器。手表上没有听筒，绝大多数设备只在两者之间切换。
-     */
-    private fun toggleAudioOutputManually() {
         val current = currentAudioOutput()
-        if (current == AudioOutputDevice.SPEAKER) {
+        val predicted = if (current == AudioOutputDevice.SPEAKER) {
             switchToNonSpeaker()
         } else {
             switchToSpeaker()
         }
+
+        if (predicted != null) {
+            lastAudioOutputSwitchAt = now
+            // 乐观更新:不等系统 callback,UI 立刻反映目标设备
+            _uiState.update { it.copy(audioOutput = predicted) }
+
+            // 兜底:个别机型 callback 不触发,延迟读一次实际状态。新切换来时取消旧的,
+            // 避免旧 job 用旧路由覆盖新乐观状态。
+            pendingAudioRefreshJob?.cancel()
+            pendingAudioRefreshJob = scope.launch {
+                delay(1500L.milliseconds)
+                refreshAudioOutput()
+            }
+        } else {
+            // 立即失败,把状态拉回当前实际值
+            refreshAudioOutput()
+        }
     }
 
-    private fun switchToSpeaker() {
+    /**
+     * 切到扬声器,返回最终预期的 UI 设备类型;若底层立刻拒绝则返回 null。
+     */
+    private fun switchToSpeaker(): AudioOutputDevice? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val speaker = audioManager
                 .availableCommunicationDevices
                 .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
             if (speaker != null) {
-                audioManager.setCommunicationDevice(speaker)
-                return
+                val ok = audioManager.setCommunicationDevice(speaker)
+                if (!ok) {
+                    Log.w(TAG, "setCommunicationDevice(SPEAKER) rejected by system")
+                    return null
+                }
+                return AudioOutputDevice.SPEAKER
             }
+            return null
         }
         @Suppress("DEPRECATION")
         run {
@@ -236,9 +241,14 @@ object TgCallManager {
             audioManager.isBluetoothScoOn = false
             audioManager.isSpeakerphoneOn = true
         }
+        return AudioOutputDevice.SPEAKER
     }
 
-    private fun switchToNonSpeaker() {
+    /**
+     * 切到非扬声器(蓝牙 / 有线 / 听筒中按优先级第一个可用项),返回该 UI 设备类型;
+     * 若没有可用目标或被系统拒绝则返回 null。
+     */
+    private fun switchToNonSpeaker(): AudioOutputDevice? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // 优先蓝牙 -> 有线耳机 -> 听筒
             val priority = listOf(
@@ -253,22 +263,29 @@ object TgCallManager {
             val target = priority
                 .firstNotNullOfOrNull { type -> available.firstOrNull { it.type == type } }
             if (target != null) {
-                audioManager.setCommunicationDevice(target)
-                return
+                val ok = audioManager.setCommunicationDevice(target)
+                if (!ok) {
+                    Log.w(TAG, "setCommunicationDevice rejected: type=${target.type}")
+                    return null
+                }
+                return target.type.toOutputDevice()
             }
-            // 没有可用的非扬声器目标：清掉路由让系统选默认
+            // 没有非扬声器目标:清掉路由让系统自选,保持 UI 同步实际状态
             audioManager.clearCommunicationDevice()
-            return
+            return null
         }
         @Suppress("DEPRECATION")
         run {
             audioManager.isSpeakerphoneOn = false
-            // 若有蓝牙耳机，启动 SCO 让通话路由过去
+            // 若有蓝牙耳机,启动 SCO 让通话路由过去
             if (audioManager.isBluetoothScoAvailableOffCall) {
                 audioManager.startBluetoothSco()
                 audioManager.isBluetoothScoOn = true
+                return AudioOutputDevice.BLUETOOTH
             }
         }
+        // 没蓝牙就交给系统(可能是有线耳机或听筒),路由变化后由 callback 回填
+        return null
     }
 
     // ===========================
@@ -295,7 +312,7 @@ object TgCallManager {
 
     /**
      * 注册输出设备 / 路由变化监听，确保用户在系统切换器（或外部按键）改了输出后，
-     * 我们的 UI 能第一时间更新，不必等用户再次打开音量对话框。
+     * UI 能第一时间更新，不必等用户再次打开音量对话框。
      */
     private fun registerAudioRouteCallbacks() {
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, mainHandler)
@@ -303,6 +320,15 @@ object TgCallManager {
             audioManager.addOnCommunicationDeviceChangedListener(
                 TGWrist.context.mainExecutor,
                 communicationDeviceListener,
+            )
+        } else {
+            // API 31+ 已用 OnCommunicationDeviceChangedListener,只在更老的设备上注册
+            // ACTION_SCO_AUDIO_STATE_UPDATED:监听 SCO 链路真正建立 / 断开,弥补
+            // AudioDeviceCallback 监听不到 SCO 状态变化的问题
+            @Suppress("DEPRECATION")
+            TGWrist.context.registerReceiver(
+                scoReceiver,
+                IntentFilter(AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED),
             )
         }
     }
@@ -319,6 +345,35 @@ object TgCallManager {
 
     private val communicationDeviceListener =
         AudioManager.OnCommunicationDeviceChangedListener { refreshAudioOutput() }
+
+    private val scoReceiver = object : BroadcastReceiver() {
+        @Suppress("DEPRECATION")
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != AudioManager.ACTION_SCO_AUDIO_STATE_UPDATED) return
+            val state = intent.getIntExtra(
+                AudioManager.EXTRA_SCO_AUDIO_STATE,
+                AudioManager.SCO_AUDIO_STATE_ERROR,
+            )
+            if (state == AudioManager.SCO_AUDIO_STATE_CONNECTED ||
+                state == AudioManager.SCO_AUDIO_STATE_DISCONNECTED
+            ) {
+                refreshAudioOutput()
+            }
+        }
+    }
+
+    /**
+     * 确保 [AudioManager] 处于 [AudioManager.MODE_IN_COMMUNICATION]。
+     *
+     * 这是 `setCommunicationDevice` / `startBluetoothSco` 真正生效的前提:在 `MODE_NORMAL`
+     * 下,系统会忽略来自非系统电话栈的通话路由请求,UI 上看就是"切了等于没切"。
+     */
+    private fun ensureCommunicationMode() {
+        if (!::audioManager.isInitialized) return
+        if (audioManager.mode != AudioManager.MODE_IN_COMMUNICATION) {
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        }
+    }
 
     /**
      * 监听通话状态变化，控制前台服务的生命周期与通知文案。
@@ -421,6 +476,8 @@ object TgCallManager {
                 actionLocked = true,
             )
         }
+        // 提前进入通话音频模式,等待对方接听阶段也能切蓝牙 / 有线耳机
+        ensureCommunicationMode()
         loadPeerUser(userId)
         TgClient.send(TdApi.CreateCall(userId, VoIP.getProtocol(), false)) { result ->
             if (result is TdApi.CallId) {
@@ -477,6 +534,10 @@ object TgCallManager {
         loadedPeerUserId = 0L
         durationJob?.cancel()
         durationJob = null
+        // 通话结束,取消可能还在等待的兜底 refresh,避免触发对已重置 UI 的写入
+        pendingAudioRefreshJob?.cancel()
+        pendingAudioRefreshJob = null
+        lastAudioOutputSwitchAt = 0L
         voipItem?.performDestroy()
         voipItem = null
         if (::audioManager.isInitialized) {
@@ -567,6 +628,9 @@ object TgCallManager {
         Log.d(TAG, "Call is pending: isCreated=${state.isCreated}, isReceived=${state.isReceived}")
         val current = _uiState.value
         if (current.callState == CALL_STATE_NONE) {
+            // 来电:在 ringing 阶段就把 audio mode 切到通话,这样用户在响铃时点蓝牙耳机
+            // 切换按钮才有反应(MODE_NORMAL 下系统会忽略 setCommunicationDevice)
+            ensureCommunicationMode()
             _uiState.update {
                 it.copy(
                     callState = CALL_STATE_INCOMING,
@@ -635,7 +699,7 @@ object TgCallManager {
         }
 
         // 进入通话模式
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        ensureCommunicationMode()
         // 不强制取消静音；保留用户在等待阶段的静音选择
         // 若需要把当前 isMute 同步到 VoIP / AudioManager：
         setMute(_uiState.value.isMute)
