@@ -54,11 +54,15 @@ adb install TGWrist.apk
 
 ## Features
 
-- Send text messages directly from your watch
-- Receive text, images, videos, and other messages
-- Run independently without relying on your phone
-- Get timely message notifications through FCM
-- Supports chat list, message history, and media preview
+- Run independently on Wear OS without relying on your phone
+- Browse chat lists, read message history, and receive timely message notifications through FCM
+- Send text messages, voice messages, and photo or video messages directly from your watch
+- Select one or more messages with a long press for quick actions
+- Reply to messages and forward one or multiple messages, with options such as hiding the sender name or removing captions when supported
+- Make and receive Telegram VoIP calls, with incoming call notifications, call status updates, and audio output switching
+- Preview, download, play, and save supported media from message details
+- Supported message rendering includes text, photos, videos, documents, GIF/animations, animated emoji, stickers, voice notes, video notes, audio files, and call records
+- Supports chat list, message history, message previews, media albums, and interaction info updates
 
 ## Design Details
 

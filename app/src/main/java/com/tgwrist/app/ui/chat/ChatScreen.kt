@@ -1,12 +1,15 @@
 package com.tgwrist.app.ui.chat
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +20,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberOverscrollEffect
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +30,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,14 +75,14 @@ import androidx.wear.compose.material3.openOnPhoneDialogCurvedText
 import com.tgwrist.app.R
 import com.tgwrist.app.data.SharedMessageInfoData
 import com.tgwrist.app.data.SharedMessageInfoKey
+import com.tgwrist.app.runtime.ChatMessagesRepository
+import com.tgwrist.app.runtime.ChatsRepository
+import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.StatusTimeText
-import com.tgwrist.app.runtime.ChatMessagesRepository
 import com.tgwrist.app.utils.ChatScreenKey
 import com.tgwrist.app.utils.ChatScrollState
-import com.tgwrist.app.runtime.ChatsRepository
 import com.tgwrist.app.utils.LocalGlobalAppState
-import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.utils.date
 import com.tgwrist.app.utils.isSameDay
 import com.tgwrist.app.utils.openChatOnPhone
@@ -243,13 +249,18 @@ fun ChatScreen(chatId: Long) {
     val mediaChose = chatViewModel.mediaChose
 
     // 多功能按钮配置
-    var selecting by remember { mutableStateOf(false) }
+    // 长按可多选消息组（key 集合）；非空即进入选中模式，强制显示多功能按钮（三个点）
+    // 当集合被清空时自动退出选中模式（与 TestScreen 的 selecting 行为一致）
+    val selectedForActionGroupKeys = remember { mutableStateListOf<Long>() }
     val showToolButton by remember {
         derivedStateOf {
-            selecting ||
+            selectedForActionGroupKeys.isNotEmpty() ||
                     ((listState.layoutInfo.visibleItems.firstOrNull()?.index ?: 0) >= 1)
         }
     }
+
+    // 更多功能 Dialog
+    var showMoreActionDialog by remember { mutableStateOf(false) }
 
     // 为本 ChatScreen 实例分配唯一 ID，避免同一 chatId 多次打开时覆盖滚动状态
     // 使用 rememberSaveable 确保该 instanceId 在 Composable 被销毁重建后仍能恢复
@@ -416,6 +427,14 @@ fun ChatScreen(chatId: Long) {
             minActiveState = Lifecycle.State.CREATED
         )
 
+    val selectedMessages = remember {
+        derivedStateOf {
+            selectedForActionGroupKeys
+                .mapNotNull { messageGroupsByKey[it] }
+                .flatMap { it.messages }
+        }
+    }
+
     LaunchedEffect(messageGroups.size, initialLoadFinished, initialUnreadTargetMessageId) {
         if (!hasRestoredScroll && messageGroups.isNotEmpty() && initialLoadFinished) {
             delay(100.milliseconds)
@@ -486,6 +505,16 @@ fun ChatScreen(chatId: Long) {
             StatusTimeText()
         }
     }) {
+        MoreActionDialog(
+            visible = showMoreActionDialog,
+            onDismissRequest = { showMoreActionDialog = false },
+            chat = chatObject,
+            selectedMessages = selectedMessages.value,
+            onCancelRequest = {
+                selectedForActionGroupKeys.clear()
+                showMoreActionDialog = false
+            },
+        )
         HorizontalPagerScaffold(pagerState = pagerState) {
             HorizontalPager(
                 state = pagerState,
@@ -670,9 +699,23 @@ fun ChatScreen(chatId: Long) {
                                                     chatObject = it,
                                                     lastReadOutboxMessageId = lastReadOutboxMessageId,
                                                     transformation = SurfaceTransformation(transformationSpec),
+                                                    selected = selectedForActionGroupKeys.contains(group.key),
                                                     onClick = {
-                                                        selectedGroupKey = group.key
-                                                        selectedMessageInfoKey = System.currentTimeMillis()
+                                                        if (selectedForActionGroupKeys.isNotEmpty()) {
+                                                            // 选中模式下点击：切换该项的选中状态
+                                                            // 集合清空后自动退出选中模式
+                                                            if (!selectedForActionGroupKeys.remove(group.key)) {
+                                                                selectedForActionGroupKeys.add(group.key)
+                                                            }
+                                                        } else {
+                                                            selectedGroupKey = group.key
+                                                            selectedMessageInfoKey = System.currentTimeMillis()
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        if (!selectedForActionGroupKeys.contains(group.key)) {
+                                                            selectedForActionGroupKeys.add(group.key)
+                                                        }
                                                     }
                                                 )
 
@@ -795,6 +838,10 @@ fun ChatScreen(chatId: Long) {
                 ) {
                     FilledIconButton(
                         onClick = {
+                            if (selectedForActionGroupKeys.isNotEmpty()) {
+                                // 选中模式：更多选项
+                                showMoreActionDialog = true
+                            } else
                             if (ChatMessagesRepository.needsJumpToLatest(chatId)) {
                                 ChatMessagesRepository.jumpToLatestMessages(chatId)
                             } else {
@@ -803,16 +850,37 @@ fun ChatScreen(chatId: Long) {
                                 }
                             }
                         },
+                        onLongClick = {
+                            // 长按取消选中模式
+                            if (selectedForActionGroupKeys.isNotEmpty()) selectedForActionGroupKeys.clear()
+                        },
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = Color(0xFF1D2B3A),
                             contentColor = Color.White
                         ),
                         modifier = Modifier.size(buttonSize)
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.stat_minus_1),
-                            contentDescription = "Down Button",
-                        )
+                        AnimatedContent(
+                            targetState = selectedForActionGroupKeys.isEmpty(),
+                            transitionSpec = {
+                                fadeIn(animationSpec = spring()) togetherWith
+                                        fadeOut(animationSpec = spring())
+                            },
+                            label = "tool_button_icon_animation"
+                        ) { normalMode ->
+                            if (normalMode) {
+                                Icon(
+                                    painter = painterResource(R.drawable.stat_minus_1),
+                                    contentDescription = "Down Button",
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreVert,
+                                    contentDescription = "More Options",
+                                )
+                            }
+                        }
+
                     }
                 }
             }

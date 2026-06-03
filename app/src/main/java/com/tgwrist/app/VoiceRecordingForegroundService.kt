@@ -46,7 +46,7 @@ class VoiceRecordingForegroundService : Service() {
             val intent = Intent(context, VoiceRecordingForegroundService::class.java).apply {
                 action = ACTION_STOP
             }
-            // startService 即可，Service 内部会调 stopForeground+stopSelf
+            // 停止服务
             context.stopService(intent)
         }
     }
@@ -136,7 +136,6 @@ class VoiceRecordingForegroundService : Service() {
             .setContentText(getString(R.string.Voice_record_notification_text))
             .setSmallIcon(R.mipmap.ic_launcher_round)
             .setContentIntent(returnPendingIntent())
-            .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)

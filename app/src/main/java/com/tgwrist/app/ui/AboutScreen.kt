@@ -116,7 +116,7 @@ fun AboutScreen() {
                     Text(
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
-                        text = "${stringResource(id = R.string.Releases_by)} GREYELASTIC GOOD HAND",
+                        text = "${stringResource(id = R.string.Releases_by)} GoodHandDev",
                         color = Color(0xFFAAAAAA),
                         modifier = Modifier
                             .fillMaxWidth()

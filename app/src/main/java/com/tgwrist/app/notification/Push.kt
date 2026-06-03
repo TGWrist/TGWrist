@@ -846,26 +846,110 @@ object Push {
     private fun pushContentToText(content: TdApi.PushMessageContent): String {
         val ctx = TGWrist.context
         return when (content) {
+            // ===== 文本 / 媒体（带 caption） =====
             is TdApi.PushMessageContentText ->
                 limitText(content.text)
             is TdApi.PushMessageContentPhoto ->
                 formatWithCaption(ctx.getString(R.string.Photo), content.caption)
             is TdApi.PushMessageContentVideo ->
                 formatWithCaption(ctx.getString(R.string.Video), content.caption)
-            is TdApi.PushMessageContentVideoNote ->
-                ctx.getString(R.string.Video)
-            is TdApi.PushMessageContentVoiceNote ->
-                ctx.getString(R.string.Voice)
             is TdApi.PushMessageContentAnimation ->
                 formatWithCaption(ctx.getString(R.string.Animation), content.caption)
+            is TdApi.PushMessageContentDocument ->
+                formatWithCaption(ctx.getString(R.string.File), content.document?.fileName ?: "")
+            is TdApi.PushMessageContentVideoNote ->
+                ctx.getString(R.string.msg_type_video_note)
+            is TdApi.PushMessageContentVoiceNote ->
+                ctx.getString(R.string.Voice)
+            is TdApi.PushMessageContentAudio ->
+                ctx.getString(R.string.msg_type_audio)
             is TdApi.PushMessageContentSticker ->
                 content.emoji.ifEmpty { ctx.getString(R.string.Unknown_message) }
-            is TdApi.PushMessageContentDocument ->
-                ctx.getString(R.string.File)
+            is TdApi.PushMessageContentMediaAlbum ->
+                ctx.getString(R.string.msg_type_media_album)
+            is TdApi.PushMessageContentPaidMedia ->
+                ctx.getString(R.string.msg_type_paid_media)
+
+            // ===== 互动 / 内容类 =====
+            is TdApi.PushMessageContentContact ->
+                ctx.getString(R.string.msg_type_contact)
+            is TdApi.PushMessageContentContactRegistered ->
+                ctx.getString(R.string.msg_type_contact_registered)
+            is TdApi.PushMessageContentLocation ->
+                ctx.getString(R.string.msg_type_location)
+            is TdApi.PushMessageContentPoll ->
+                ctx.getString(R.string.msg_type_poll)
+            is TdApi.PushMessageContentGame ->
+                ctx.getString(R.string.msg_type_game)
+            is TdApi.PushMessageContentGameScore ->
+                ctx.getString(R.string.msg_type_game_score)
+            is TdApi.PushMessageContentStory ->
+                ctx.getString(R.string.msg_type_story)
+            is TdApi.PushMessageContentChecklist ->
+                ctx.getString(R.string.msg_type_checklist)
+            is TdApi.PushMessageContentChecklistTasksAdded ->
+                ctx.getString(R.string.msg_type_checklist_tasks_added)
+            is TdApi.PushMessageContentChecklistTasksDone ->
+                ctx.getString(R.string.msg_type_checklist_tasks_done)
+
+            // ===== 礼物 / 抽奖 / 支付 =====
+            is TdApi.PushMessageContentGift ->
+                ctx.getString(R.string.msg_type_gift)
+            is TdApi.PushMessageContentUpgradedGift ->
+                ctx.getString(R.string.msg_type_upgraded_gift)
+            is TdApi.PushMessageContentGiveaway ->
+                ctx.getString(R.string.msg_type_giveaway)
+            is TdApi.PushMessageContentPremiumGiftCode ->
+                ctx.getString(R.string.msg_type_premium_gift_code)
+            is TdApi.PushMessageContentInvoice ->
+                ctx.getString(R.string.msg_type_invoice)
+            is TdApi.PushMessageContentRecurringPayment ->
+                ctx.getString(R.string.msg_type_recurring_payment)
+
+            // ===== 群组 / 聊天系统消息 =====
+            is TdApi.PushMessageContentBasicGroupChatCreate ->
+                ctx.getString(R.string.msg_type_basic_group_create)
+            is TdApi.PushMessageContentChatAddMembers ->
+                ctx.getString(R.string.Joined_the_group)
+            is TdApi.PushMessageContentChatChangePhoto ->
+                ctx.getString(R.string.msg_type_chat_change_photo)
+            is TdApi.PushMessageContentChatChangeTitle ->
+                ctx.getString(R.string.msg_type_chat_change_title)
+            is TdApi.PushMessageContentChatDeleteMember ->
+                ctx.getString(R.string.msg_type_chat_delete_member)
+            is TdApi.PushMessageContentChatJoinByLink ->
+                ctx.getString(R.string.msg_type_chat_join_by_link)
+            is TdApi.PushMessageContentChatJoinByRequest ->
+                ctx.getString(R.string.msg_type_chat_join_by_request)
+            is TdApi.PushMessageContentChatSetBackground ->
+                ctx.getString(R.string.msg_type_chat_set_background)
+            is TdApi.PushMessageContentChatSetTheme ->
+                ctx.getString(R.string.msg_type_chat_set_theme)
+            is TdApi.PushMessageContentScreenshotTaken ->
+                ctx.getString(R.string.msg_type_screenshot_taken)
+            is TdApi.PushMessageContentProximityAlertTriggered ->
+                ctx.getString(R.string.msg_type_proximity_alert_triggered)
+
+            // ===== 视频群组通话 =====
+            is TdApi.PushMessageContentInviteVideoChatParticipants ->
+                ctx.getString(R.string.msg_type_invite_video_chat_participants)
+            is TdApi.PushMessageContentVideoChatStarted ->
+                ctx.getString(R.string.msg_type_video_chat_started)
+            is TdApi.PushMessageContentVideoChatEnded ->
+                ctx.getString(R.string.msg_type_video_chat_ended)
+
+            // ===== 建议 =====
+            is TdApi.PushMessageContentSuggestBirthdate ->
+                ctx.getString(R.string.msg_type_suggest_birthdate)
+            is TdApi.PushMessageContentSuggestProfilePhoto ->
+                ctx.getString(R.string.msg_type_suggest_profile_photo)
+
+            // ===== 转发 / 隐藏 =====
             is TdApi.PushMessageContentMessageForwards ->
                 "${content.totalCount} forwarded messages"
             is TdApi.PushMessageContentHidden ->
                 ctx.getString(R.string.Unknown_message)
+
             else -> ctx.getString(R.string.Unknown_message)
         }
     }

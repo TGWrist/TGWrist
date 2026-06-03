@@ -187,8 +187,13 @@ object TgClient {
     /**
      * 发送 TDLib 请求。
      *
-     * response callback 也不直接在 TDLib 回调线程执行，
-     * 而是进入 TgClient 的事件队列。
+     * send 调用本身只把请求投递给 TDLib（TDLib 内部异步处理），立即返回，不会阻塞。
+     *
+     * response callback 不再进入串行事件队列（eventChannel），
+     * 而是每个响应在 eventScope 上独立并发执行。
+     *
+     * 这样多个 send 的响应彼此独立，不会出现“发送 1 条、处理 1 条、
+     * 完成后才处理下一条”的串行阻塞。
      */
     fun send(
         query: TdApi.Function<*>,
@@ -211,15 +216,42 @@ object TgClient {
 
         try {
             currentClient.send(query) { result ->
-                postEvent(
-                    generation = currentGeneration,
-                    name = "Response:$queryName"
-                ) {
-                    callback(result)
-                }
+                dispatchResponse(currentGeneration, queryName, result, callback)
             }
         } catch (e: Throwable) {
             Log.e(TAG, "TDLib send failed: $queryName", e)
+        }
+    }
+
+    /**
+     * 响应回调分发。
+     *
+     * 每个响应独立 launch，彼此并发，不经过串行事件队列。
+     * 仍然保留 generation 校验，丢弃旧 Client 的过期响应。
+     */
+    private fun dispatchResponse(
+        eventGeneration: Long,
+        queryName: String,
+        result: TdApi.Object,
+        callback: (TdApi.Object) -> Unit
+    ) {
+        eventScope.launch {
+            val currentGeneration = generation.get()
+
+            if (eventGeneration != currentGeneration) {
+                Log.d(
+                    TAG,
+                    "Drop stale response: Response:$queryName, " +
+                            "eventGeneration=$eventGeneration, currentGeneration=$currentGeneration"
+                )
+                return@launch
+            }
+
+            try {
+                callback(result)
+            } catch (e: Throwable) {
+                Log.e(TAG, "TgClient response failed: Response:$queryName", e)
+            }
         }
     }
 
@@ -285,7 +317,16 @@ object TgClient {
                         }
                     }
                 } else {
-                    callback(typedObj)
+                    // 每个回调独立并发执行，不再内联阻塞 update 事件循环。
+                    // Dispatchers.Default 会把真实并行度限制在 CPU 核心数，
+                    // 订阅者很多时只是协程排队，不会出现线程爆炸。
+                    eventScope.launch {
+                        try {
+                            callback(typedObj)
+                        } catch (e: Throwable) {
+                            Log.e(TAG, "Subscriber callback failed: ${type.simpleName}", e)
+                        }
+                    }
                 }
             }
         }
@@ -357,6 +398,15 @@ object TgClient {
         }
     }
 
+    /**
+     * update 分发。
+     *
+     * 这里只做轻量 fan-out：把 update 投递给每个订阅者的 wrapper。
+     * 实际回调已在 wrapper 内 launch 到 eventScope / mainScope 上并发执行，
+     * 因此本方法不会被慢回调阻塞，update 事件循环也不会被拖住。
+     *
+     * 注意：并发执行意味着同一 update 类型的多个订阅者之间不再保证顺序。
+     */
     private fun dispatchUpdate(update: TdApi.Object) {
         val list = callbacks[update.javaClass] ?: return
 
@@ -364,7 +414,7 @@ object TgClient {
             try {
                 callback(update)
             } catch (e: Throwable) {
-                Log.e(TAG, "Subscriber callback failed: ${update.javaClass.simpleName}", e)
+                Log.e(TAG, "Subscriber dispatch failed: ${update.javaClass.simpleName}", e)
             }
         }
     }

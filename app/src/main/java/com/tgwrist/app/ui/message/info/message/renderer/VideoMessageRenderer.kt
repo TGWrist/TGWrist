@@ -55,14 +55,13 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import coil.size.Size
 import com.tgwrist.app.R
+import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
+import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.TranslationButton
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
-import com.tgwrist.app.runtime.Config
-import com.tgwrist.app.runtime.TgClient
-import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -527,30 +526,41 @@ fun VideoMessageRenderer(
                 item(key = "play_button") {
                     FilledTonalButton(
                         onClick = {
-                            if (Config.isNotUseBuiltVideoPlayer) {
-                                // 使用外部播放器
-                                openWithExternalPlayer()
-                            } else {
-                                // 使用内置播放器
-                                navController.navigate(Destinations.videoView(videoFileUrl))
-                            }
+                            navController.navigate(Destinations.videoView(videoFileUrl))
                         },
                         label = {
                             Text(
-                                text = if (Config.isNotUseBuiltVideoPlayer)
-                                    stringResource(R.string.open_with_external)
-                                else
-                                    stringResource(R.string.play_video),
+                                text = stringResource(R.string.play_video),
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },
                         icon = {
                             Icon(
-                                imageVector = if (Config.isNotUseBuiltVideoPlayer)
-                                    Icons.AutoMirrored.Rounded.OpenInNew
-                                else
-                                    Icons.Rounded.PlayCircle,
+                                imageVector = Icons.Rounded.PlayCircle,
                                 contentDescription = "Play",
+                            )
+                        },
+                        transformation = SurfaceTransformation(transformationSpec),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                    )
+                }
+
+                // ========== 用外部应用打开 ==========
+                item(key = "open_button") {
+                    FilledTonalButton(
+                        onClick = { openWithExternalPlayer() },
+                        label = {
+                            Text(
+                                text = stringResource(R.string.open_with_external),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                                contentDescription = "Open"
                             )
                         },
                         transformation = SurfaceTransformation(transformationSpec),
@@ -584,6 +594,16 @@ fun VideoMessageRenderer(
                             .transformedHeight(this, transformationSpec)
                     )
                 }
+            }
+
+            // 回复按钮
+            item {
+                ReplyMessageButton(
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
+                    surfaceTransformation = SurfaceTransformation(transformationSpec),
+                    properties = messageRenderContext.properties,
+                    message = messageRenderContext.message
+                )
             }
 
             // 回复按钮

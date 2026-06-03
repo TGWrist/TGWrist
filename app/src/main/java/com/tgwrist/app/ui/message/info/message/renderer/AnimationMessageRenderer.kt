@@ -67,6 +67,7 @@ import coil.size.Size
 import com.tgwrist.app.R
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.TranslationButton
@@ -685,6 +686,16 @@ fun AnimationMessageRenderer(
             // 回复按钮
             item(key = "reply") {
                 ReplyMessageButton(
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
+                    surfaceTransformation = SurfaceTransformation(transformationSpec),
+                    properties = messageRenderContext.properties,
+                    message = messageRenderContext.message
+                )
+            }
+
+            // 转发按钮
+            item {
+                ForwardMessageButton(
                     modifier = Modifier.transformedHeight(this, transformationSpec),
                     surfaceTransformation = SurfaceTransformation(transformationSpec),
                     properties = messageRenderContext.properties,

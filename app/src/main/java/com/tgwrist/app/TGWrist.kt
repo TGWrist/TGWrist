@@ -11,6 +11,7 @@ import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.runtime.TgCallManager
 import com.tgwrist.app.runtime.UserManager
 import org.thunderdog.challegram.voip.VoIP
+import java.io.File
 
 class TGWrist : Application(), LifecycleObserver {
     // 伴生对象，相当于 Java 的 static
@@ -28,6 +29,10 @@ class TGWrist : Application(), LifecycleObserver {
         application = this
         // 在应用启动时，将 applicationContext 赋值给静态变量
         context = applicationContext
+        // 清理上次会话遗留的媒体选择器临时文件，避免 cacheDir/picker_share 无限膨胀
+        Thread {
+            clearPickerShareCache()
+        }.start()
         UserManager.init(this) // 初始化 UserManager
         ChatsRepository.init() // 初始化 ChatsRepository
         ChatMessagesRepository.init() // 初始化聊天消息仓库
@@ -39,6 +44,23 @@ class TGWrist : Application(), LifecycleObserver {
             VoIP.initialize(applicationContext)
         } catch (e: Throwable) {
             e.printStackTrace()
+        }
+    }
+
+    /**
+     * 删除 cacheDir/picker_share 下的所有文件。
+     *
+     * 该目录用于把 MediaStore content:// 流落盘成本地文件以喂给 TDLib，
+     * 一旦消息发出便不再需要。由于 TDLib 在 SendMessage 回调返回后仍然会
+     * 异步读取文件，安全的做法是把清理推迟到下一次进程启动统一清理。
+     */
+    private fun clearPickerShareCache() {
+        runCatching {
+            val dir = File(cacheDir, "picker_share")
+            if (!dir.exists()) return@runCatching
+            dir.listFiles()?.forEach { file ->
+                runCatching { file.deleteRecursively() }
+            }
         }
     }
 

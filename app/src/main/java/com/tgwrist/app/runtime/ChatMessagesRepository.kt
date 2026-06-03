@@ -1317,6 +1317,28 @@ object ChatMessagesRepository {
         TgClient.subscribe(TdApi.UpdateMessageReactions::class.java) { update ->
             updateMessageReactions(update)
         }
+
+        // 订阅消息交互信息更新
+        TgClient.subscribe(TdApi.UpdateMessageInteractionInfo::class.java) { update ->
+            updateMessageInteractionInfo(update)
+        }
+    }
+
+    private fun updateMessageInteractionInfo(update: TdApi.UpdateMessageInteractionInfo) {
+        if (!isChatActive(update.chatId)) return
+        scope.launch {
+            _messagesByChat.update { prev ->
+                val current = prev[update.chatId] ?: return@update prev
+                val oldMsg = current[update.messageId] ?: return@update prev
+
+                val next = oldMsg.copy(interactionInfo = update.interactionInfo)
+                val newChatMap = current.toMutableMap().apply {
+                    this[update.messageId] = next
+                }
+
+                prev + (update.chatId to newChatMap.toMap())
+            }
+        }
     }
 
     /**

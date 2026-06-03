@@ -63,7 +63,7 @@ class CallForegroundService : Service() {
             val intent = Intent(context, CallForegroundService::class.java).apply {
                 action = ACTION_STOP_CALL
             }
-            // 用 startService 即可，Service 内部会调用 stopForeground+stopSelf
+            // 停止服务
             context.stopService(intent)
         }
     }

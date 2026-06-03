@@ -29,6 +29,7 @@ import androidx.wear.compose.material3.ScrollIndicator
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.TranslationButton
@@ -108,6 +109,13 @@ fun TextMessageRenderer(
 
             // 回复按钮
             ReplyMessageButton(
+                modifier = Modifier.padding(top = 8.dp),
+                properties = messageRenderContext.properties,
+                message = messageRenderContext.message
+            )
+
+            // 转发按钮
+            ForwardMessageButton(
                 modifier = Modifier.padding(top = 8.dp),
                 properties = messageRenderContext.properties,
                 message = messageRenderContext.message

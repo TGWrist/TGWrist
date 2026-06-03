@@ -580,6 +580,16 @@ fun VoiceNoteMessageRenderer(
                 )
             }
 
+            // 回复按钮
+            item {
+                ReplyMessageButton(
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
+                    surfaceTransformation = SurfaceTransformation(transformationSpec),
+                    properties = messageRenderContext.properties,
+                    message = messageRenderContext.message
+                )
+            }
+
             // 删除按钮
             if (messageRenderContext.chat != null) {
                 item(key = "Delete") {

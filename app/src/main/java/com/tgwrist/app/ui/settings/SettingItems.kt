@@ -1,12 +1,9 @@
 package com.tgwrist.app.ui.settings
 
 import android.Manifest
-import android.app.NotificationManager
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.compose.material.icons.Icons
@@ -20,14 +17,12 @@ import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Pending
-import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Theaters
 import androidx.compose.material.icons.rounded.VideoFile
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import androidx.core.net.toUri
 import androidx.wear.compose.material3.Icon
 import com.google.firebase.Firebase
 import com.google.firebase.analytics.FirebaseAnalytics
@@ -100,16 +95,6 @@ fun buildSettingItems(
                 checkAndRequestFullScreenIntentPermission(context)
             }
         ),*/
-        // 是否使用外部视频播放器
-        SettingItem.Switch(
-            isSelected = Config.isNotUseBuiltVideoPlayer,
-            onCheckedChange = { enabled ->
-                Config.isNotUseBuiltVideoPlayer = enabled
-            },
-            titleRes = R.string.Use_external_video_player,
-            icon = { Icon(Icons.Rounded.PlayCircle, contentDescription = null) },
-            rebuildAfterAction = true
-        ),
         // 存储管理
         SettingItem.ClickAndOpenPage(
             titleRes = R.string.Storage_management,
@@ -389,29 +374,4 @@ fun disableNotification() {
             null
         )
     )
-}
-
-fun checkAndRequestFullScreenIntentPermission(context: Context) {
-    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-    // 该权限限制仅在 Android 14 (API 34) 及以上版本生效
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        if (!notificationManager.canUseFullScreenIntent()) {
-            // 当前未获授权，构造 Intent 跳转到系统设置页
-            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
-                // 重点：加上 package URI，可以直接跳到你应用的专属设置页，避免用户在应用列表中苦找
-                data = "package:${context.packageName}".toUri()
-                // 如果在非 Activity 环境下启动，需要添加此 Flag
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            println("正在跳转")
-            context.startActivity(intent)
-        } else {
-            // 已经拥有权限，可安全触发全屏通知 (Full-Screen Intent)
-            println("已经有权限")
-        }
-    } else {
-        // Android 14 以下版本，只要在 Manifest 中声明了便默认获得权限
-        println("不需要申请权限")
-    }
 }

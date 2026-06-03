@@ -52,6 +52,7 @@ fun SplashLoginScreen() {
     var showDialogText by remember { mutableStateOf("") }
     val mainScreenNeedHandleTdlibLogin by TdLibInitManage.isPageOnLogin.collectAsState()
     var onTestMode by remember { mutableStateOf(false) }
+    var isPassPage0 by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         TdLibInitManage.isPageOnLogin.value = true
@@ -71,7 +72,7 @@ fun SplashLoginScreen() {
                 when(val state = update.authorizationState) {
                     is TdApi.AuthorizationStateWaitPhoneNumber -> {
                         coroutineScope.launch {
-                            pagerState.animateScrollToPage(1)
+                            pagerState.animateScrollToPage(if (userInfo == null && !isPassPage0) 0 else 1)
                         }
                     }
 
@@ -133,6 +134,7 @@ fun SplashLoginScreen() {
                     AnimatedPage(pageIndex = page, pagerState = pagerState) {
                         Page0 {
                             coroutineScope.launch {
+                                isPassPage0 = true
                                 pagerState.animateScrollToPage(1)
                             }
                         }

@@ -49,8 +49,6 @@ fun ThumbnailChatPhoto(
 ) {
     val context = LocalContext.current
 
-    // 假设 Config.accentColorList 是你的数据源
-    // 注意：不要用 val x by x，会报错。这里假设是从 Config 获取
     val accentColorList by accentColorList.collectAsState()
 
     // 1. 只有确信文件存在磁盘上时，才更新这个 file 对象
@@ -72,28 +70,13 @@ fun ThumbnailChatPhoto(
             return file.exists() && file.length() > 0
         }
 
-        // 2. 最高优先级：若当前 imageFile 在磁盘上仍然有效，直接保留。
-        //    这能避免从导航栈返回时，因 TdApi.File 是新对象、其 local 状态尚未补齐
-        //    （isDownloadingCompleted=false 或 path 为空），导致已有图片被错误清空。
-        val currentValid = imageFile != null && isValidFile(imageFile!!.path)
-        if (currentValid) {
-            // 仅当 thumbnail 明确指向另一个已下载完成且路径不同的文件时才切换
-            if (thumbnail.local.isDownloadingCompleted &&
-                isValidFile(thumbnail.local.path) &&
-                imageFile!!.path != thumbnail.local.path
-            ) {
-                imageFile = File(thumbnail.local.path)
-            }
-            return@LaunchedEffect
-        }
-
-        // 3. 当前没有有效图：直接用 thumbnail 已存在的本地文件
+        // 2. 如果本地已经下载完成且文件存在，直接使用
         if (thumbnail.local.isDownloadingCompleted && isValidFile(thumbnail.local.path)) {
             imageFile = File(thumbnail.local.path)
             return@LaunchedEffect
         }
 
-        // 4. 否则发起下载
+        // 3. 否则发起下载
         try {
             val downloadedFile = suspendCancellableCoroutine { cont ->
                 TgClient.send(TdApi.DownloadFile(

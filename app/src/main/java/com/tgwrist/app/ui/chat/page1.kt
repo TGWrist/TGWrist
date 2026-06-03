@@ -24,11 +24,11 @@ import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardReturn
+import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardVoice
-import androidx.compose.material.icons.rounded.Mood
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Photo
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -49,17 +49,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.foundation.pager.PagerState
+import androidx.wear.compose.material3.AppCard
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.FilledIconButton
@@ -68,11 +71,8 @@ import androidx.wear.compose.material3.IconButtonDefaults
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
-import androidx.wear.compose.material3.SurfaceTransformation
+import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.Text
-import androidx.wear.compose.material3.TitleCard
-import androidx.wear.compose.material3.lazy.rememberTransformationSpec
-import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
 import com.tgwrist.app.VoiceRecordingForegroundService
 import com.tgwrist.app.data.MediaData
@@ -82,6 +82,7 @@ import com.tgwrist.app.data.SharedMessageInfoData
 import com.tgwrist.app.data.SharedMessageInfoKey
 import com.tgwrist.app.runtime.ChatMessagesRepository
 import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.runtime.Config.forwardMessagesFlow
 import com.tgwrist.app.runtime.Config.replyMessageFlow
 import com.tgwrist.app.runtime.TgCallManager
 import com.tgwrist.app.runtime.TgClient
@@ -98,7 +99,6 @@ import org.drinkless.tdlib.TdApi
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.milliseconds
-import androidx.core.net.toUri
 
 @Composable
 fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<MediaData>, pagerState: PagerState) {
@@ -109,10 +109,14 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
     val listState = rememberTransformingLazyColumnState()
     val overscroll = rememberOverscrollEffect()
     val coroutineScope = rememberCoroutineScope()
-    val transformationSpec = rememberTransformationSpec()
     val interactionSource1 = remember { MutableInteractionSource() }
     val interactionSource2 = remember { MutableInteractionSource() }
     val replyMsg by replyMessageFlow.collectAsState()
+    val forwardMsgs by forwardMessagesFlow.collectAsState()
+    // 转发时是否隐藏发送者（即 sendCopy：以副本形式发送，不带原始来源）
+    var sendCopy by remember(forwardMsgs) { mutableStateOf(false) }
+    // 转发副本时是否移除媒体说明文字（removeCaption，仅在 sendCopy 为 true 时有意义）
+    var removeCaption by remember(forwardMsgs) { mutableStateOf(false) }
 
     LaunchedEffect(lifecycleOwner, chatId) {
         ChatMessagesRepository.bindChat(lifecycleOwner, chatId)
@@ -320,71 +324,174 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                 }
             }
 
-            // 回复消息显示
-            replyMsg?.let {
-                if (it.chatId == chatId || it.chatId == 0L || it.canBeRepliedInAnotherChat) {
-                    item {
-                        var replyMessage by remember { mutableStateOf<TdApi.Message?>(null) }
-                        var replyLoaded by remember { mutableStateOf(false) }
-                        val isSameChat = it.chatId == chatId || it.chatId == 0L
+            if (forwardMsgs != null) {
+                // 需要转发的消息显示
+                item {
+                    // 1. 创建一个 State 来保存异步获取到的文本
+                    var forwardPreviewText by remember(forwardMsgs) { mutableStateOf<String?>(null) }
+                    // 2. 使用 LaunchedEffect 发起异步请求
+                    LaunchedEffect(forwardMsgs) {
+                        if (forwardMsgs?.messageIds?.size == 1) {
+                            val forwardMsgId = forwardMsgs?.messageIds[0] ?: return@LaunchedEffect
 
-                        // 尝试从本地缓存获取，否则通过 TgClient 获取
-                        LaunchedEffect(replyMsg) {
-                            if (replyMsg != null) {
-                                val targetChatId = if (replyMsg!!.chatId == 0L) chatId else replyMsg!!.chatId
-                                // 先尝试从 ChatMessagesRepository 中获取
-                                if (isSameChat) {
-                                    val cached = chatMessagesById[replyMsg!!.messageId]
-                                    if (cached != null) {
-                                        replyMessage = cached
-                                        replyLoaded = true
-                                        return@LaunchedEffect
-                                    }
+                            TgClient.send(TdApi.GetMessage(forwardMsgs!!.chatId, forwardMsgId)) { result ->
+                                if (result is TdApi.Message) {
+                                    // 3. 在回调中更新 State，这会自动触发 Compose 重新绘制使用到该变量的地方
+                                    forwardPreviewText = handleAllMessages(context, result, maxText = 48).text
                                 }
-                                // 否则通过网络获取
-                                val msg = suspendCancellableCoroutine { cont ->
-                                    TgClient.send(TdApi.GetMessage(targetChatId, replyMsg!!.messageId)) { res ->
-                                        if (cont.isActive) { // 检查协程是否仍然活跃
-                                            cont.resume(res as? TdApi.Message)
-                                        }
-                                    }
-                                }
-                                replyMessage = msg
-                                replyLoaded = true
                             }
+                        } else {
+                            forwardPreviewText = null
                         }
+                    }
 
-                        val replyPreviewText = remember(replyMessage) {
-                            if (replyMessage != null) {
-                                handleAllMessages(context, replyMessage, maxText = 48).text
-                            } else null
-                        }
-
-                        TitleCard(
-                            title = { Text(stringResource(R.string.Reply)) },
-                            onClick = {
-                                if (isSameChat && replyMessage != null) {
-                                    // 打开回复消息的 MessageInfo
-                                    val key = System.currentTimeMillis()
-                                    appState.sharedMessageInfo[SharedMessageInfoKey(chatId, key)] =
-                                        SharedMessageInfoData(listOf(replyMessage!!.id))
-                                    navController.navigate(Destinations.messageInfo(chatId, key))
-                                }
-                            },
-                            onLongClick = {
-                                Config.replyMessage = null
-                            }
-                        ) {
+                    AppCard(
+                        appName = { Text(stringResource(R.string.Forward)) },
+                        onClick = {
+                            // 打开转发消息的 MessageInfo
+                            val key = System.currentTimeMillis()
+                            appState.sharedMessageInfo[SharedMessageInfoKey(chatId, key)] =
+                                SharedMessageInfoData(forwardMsgs?.messageIds?.sorted() ?: listOf())
+                            navController.navigate(Destinations.messageInfo(chatId, key))
+                        },
+                        appImage = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_forward),
+                                contentDescription = null
+                            )
+                        },
+                        title = {
                             Text(
-                                text = if (replyLoaded) {
-                                    replyPreviewText ?: stringResource(R.string.Message_deleted)
-                                } else {
-                                    "..."
-                                },
+                                text = forwardPreviewText?.takeIf { it.isNotBlank() }
+                                    ?: stringResource(R.string.Forward_messages_count, forwardMsgs?.messageIds?.size ?: 0),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodySmall
                             )
+                        },
+                        onLongClick = {
+                            Config.forwardMessages = null
+                        }
+                    ){}
+                }
+
+                // 是否隐藏发送者名称（仅当消息允许以副本形式发送时显示）
+                if (forwardMsgs?.canBeCopied == true) {
+                    item {
+                        SwitchButton(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp),
+                            checked = sendCopy,
+                            onCheckedChange = {
+                                sendCopy = it
+                                // sendCopy 关闭后 removeCaption 失去意义，重置
+                                if (!it) removeCaption = false
+                            },
+                            label = {
+                                Text(
+                                    text = stringResource(R.string.Forward_hide_sender_name),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        )
+                    }
+
+                    // 移除媒体说明文字
+                    item {
+                        SwitchButton(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp),
+                            checked = removeCaption,
+                            onCheckedChange = { removeCaption = it },
+                            label = {
+                                Text(
+                                    text = stringResource(R.string.Forward_remove_caption),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        )
+                    }
+                }
+            } else {
+                // 回复消息显示
+                replyMsg?.let {
+                    if (it.chatId == chatId || it.chatId == 0L || it.canBeRepliedInAnotherChat) {
+                        item {
+                            var replyMessage by remember { mutableStateOf<TdApi.Message?>(null) }
+                            var replyLoaded by remember { mutableStateOf(false) }
+                            val isSameChat = it.chatId == chatId || it.chatId == 0L
+
+                            // 尝试从本地缓存获取，否则通过 TgClient 获取
+                            LaunchedEffect(replyMsg) {
+                                if (replyMsg != null) {
+                                    val targetChatId = if (replyMsg!!.chatId == 0L) chatId else replyMsg!!.chatId
+                                    // 先尝试从 ChatMessagesRepository 中获取
+                                    if (isSameChat) {
+                                        val cached = chatMessagesById[replyMsg!!.messageId]
+                                        if (cached != null) {
+                                            replyMessage = cached
+                                            replyLoaded = true
+                                            return@LaunchedEffect
+                                        }
+                                    }
+                                    // 否则通过网络获取
+                                    val msg = suspendCancellableCoroutine { cont ->
+                                        TgClient.send(TdApi.GetMessage(targetChatId, replyMsg!!.messageId)) { res ->
+                                            if (cont.isActive) { // 检查协程是否仍然活跃
+                                                cont.resume(res as? TdApi.Message)
+                                            }
+                                        }
+                                    }
+                                    replyMessage = msg
+                                    replyLoaded = true
+                                }
+                            }
+
+                            val replyPreviewText = remember(replyMessage) {
+                                if (replyMessage != null) {
+                                    handleAllMessages(context, replyMessage, maxText = 48).text
+                                } else null
+                            }
+
+                            AppCard(
+                                appName = { Text(stringResource(R.string.Reply)) },
+                                title = {
+                                    Text(
+                                        text = if (replyLoaded) {
+                                            replyPreviewText ?: stringResource(R.string.Message_deleted)
+                                        } else {
+                                            "..."
+                                        },
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                },
+                                appImage = {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.Reply,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    if (isSameChat && replyMessage != null) {
+                                        // 打开回复消息的 MessageInfo
+                                        val key = System.currentTimeMillis()
+                                        appState.sharedMessageInfo[SharedMessageInfoKey(chatId, key)] =
+                                            SharedMessageInfoData(listOf(replyMessage!!.id))
+                                        navController.navigate(Destinations.messageInfo(chatId, key))
+                                    }
+                                },
+                                onLongClick = {
+                                    Config.replyMessage = null
+                                }
+                            ) {}
                         }
                     }
                 }
@@ -395,7 +502,6 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                     VoiceRecordingDisplay(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                         isPaused = isVoicePaused,
                         isPreview = isVoicePreview,
@@ -421,7 +527,6 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                     CustomTextInput(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
                             .padding(horizontal = 6.dp, vertical = 6.dp),
                         chatId = chatId,
                         text = text,
@@ -432,8 +537,7 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
 
             item {
                 Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.transformedHeight(this, transformationSpec)
+                    contentAlignment = Alignment.Center
                 ) {
                     if (isThisChatRecording) {
                         // 录音模式：暂停继续 / 停止 或 发送
@@ -449,7 +553,6 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                                         }
                                     },
                                     modifier = Modifier.animateWidth(interactionSource1),
-                                    transformation = SurfaceTransformation(transformationSpec),
                                     interactionSource = interactionSource1,
                                 ) {
                                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -520,7 +623,6 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                                     }
                                 },
                                 modifier = Modifier.animateWidth(interactionSource2),
-                                transformation = SurfaceTransformation(transformationSpec),
                                 interactionSource = interactionSource2,
                             ) {
                                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -543,7 +645,6 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                                 text += "\n"
                             },
                             modifier = Modifier.animateWidth(interactionSource1),
-                            transformation = SurfaceTransformation(transformationSpec),
                             interactionSource = interactionSource1,
                         ) {
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -557,121 +658,166 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                         // 按钮2 消息发送
                         Button(
                             onClick = {
-                                // 定义回复部分
-                                val replyTo = replyMsg?.let { msg ->
-                                    if (msg.chatId == chatId || msg.chatId == 0L) {
-                                        TdApi.InputMessageReplyToMessage(
-                                            msg.messageId,
-                                            msg.quote,
-                                            0,
-                                            null
-                                        )
-                                    } else {
-                                        if (msg.canBeRepliedInAnotherChat) {
-                                            TdApi.InputMessageReplyToExternalMessage(
-                                                msg.chatId,
-                                                msg.messageId,
-                                                msg.quote,
-                                                0,
-                                                null
-                                            )
-                                        } else null
-                                    }
-                                }
-
-                                val pendingMedia = mediaChose.toList()
-                                val captionText = text
-                                val onSent: () -> Unit = {
-                                    text = ""
-                                    Config.replyMessage = null
-                                    mediaChose.clear()
-                                    coroutineScope.launch {
-                                        pagerState.scrollToPage(0)
-                                    }
-                                }
-
-                                when {
-                                    pendingMedia.isEmpty() -> {
-                                        if (captionText.isBlank()) return@Button
-                                        // 纯文本：保持原有行为
+                                // 转发特例
+                                if (forwardMsgs != null) {
+                                    if (text.isNotBlank()) {
                                         TgClient.send(
                                             TdApi.SendMessage(
                                                 chatId,
                                                 null,
-                                                replyTo,
+                                                null,
                                                 null,
                                                 null,
                                                 TdApi.InputMessageText().apply {
-                                                    this.text = TdApi.FormattedText(captionText, null)
+                                                    this.text = TdApi.FormattedText(text, null)
                                                     this.clearDraft = true
                                                 }
                                             )
                                         ) {
                                             if (it is TdApi.Message) {
                                                 println("Message sent successfully, ChatId is $chatId")
-                                                onSent()
+                                                text = ""
                                             } else {
                                                 println("Failed to send message is $it")
                                             }
                                         }
                                     }
-                                    else -> {
-                                        // 媒体消息：URI → 本地路径 → InputMessagePhoto / InputMessageVideo
+
+                                    TgClient.send(TdApi.ForwardMessages(chatId,
+                                        null,
+                                        forwardMsgs!!.chatId,
+                                        forwardMsgs!!.messageIds.sorted().toLongArray(),
+                                        null,
+                                        sendCopy,
+                                        removeCaption)
+                                    ) {
+                                        if (it is TdApi.Messages) {
+                                            println("Messages forwarded successfully, ChatId is $chatId")
+                                            Config.forwardMessages = null
+                                            coroutineScope.launch {
+                                                pagerState.scrollToPage(0)
+                                            }
+                                        } else {
+                                            println("Failed to forward messages is $it")
+                                        }
+                                    }
+                                } else {
+                                    // 定义回复部分
+                                    val replyTo = replyMsg?.let { msg ->
+                                        if (msg.chatId == chatId || msg.chatId == 0L) {
+                                            TdApi.InputMessageReplyToMessage(
+                                                msg.messageId,
+                                                msg.quote,
+                                                0,
+                                                null
+                                            )
+                                        } else {
+                                            if (msg.canBeRepliedInAnotherChat) {
+                                                TdApi.InputMessageReplyToExternalMessage(
+                                                    msg.chatId,
+                                                    msg.messageId,
+                                                    msg.quote,
+                                                    0,
+                                                    null
+                                                )
+                                            } else null
+                                        }
+                                    }
+
+                                    val pendingMedia = mediaChose.toList()
+                                    val captionText = text
+                                    val onSent: () -> Unit = {
+                                        text = ""
+                                        Config.replyMessage = null
+                                        mediaChose.clear()
                                         coroutineScope.launch {
-                                            val resolved = withContext(Dispatchers.IO) {
-                                                pendingMedia.mapNotNull { item ->
-                                                    val uri = runCatching { item.path.toUri() }.getOrNull()
-                                                        ?: return@mapNotNull null
-                                                    val path = resolveContentUriToFile(context, uri)
-                                                        ?: return@mapNotNull null
-                                                    item.type to path
+                                            pagerState.scrollToPage(0)
+                                        }
+                                    }
+
+                                    when {
+                                        pendingMedia.isEmpty() -> {
+                                            if (captionText.isBlank()) return@Button
+                                            // 纯文本：保持原有行为
+                                            TgClient.send(
+                                                TdApi.SendMessage(
+                                                    chatId,
+                                                    null,
+                                                    replyTo,
+                                                    null,
+                                                    null,
+                                                    TdApi.InputMessageText().apply {
+                                                        this.text = TdApi.FormattedText(captionText, null)
+                                                        this.clearDraft = true
+                                                    }
+                                                )
+                                            ) {
+                                                if (it is TdApi.Message) {
+                                                    println("Message sent successfully, ChatId is $chatId")
+                                                    onSent()
+                                                } else {
+                                                    println("Failed to send message is $it")
                                                 }
                                             }
-                                            if (resolved.isEmpty()) {
-                                                Log.w("Page1", "No usable media files after resolving URIs")
-                                                return@launch
-                                            }
-                                            val caption = if (captionText.isBlank()) null
-                                                else TdApi.FormattedText(captionText, null)
-
-                                            if (resolved.size == 1) {
-                                                val (type, path) = resolved[0]
-                                                val content = buildMediaInputMessage(type, path, caption)
-                                                TgClient.send(
-                                                    TdApi.SendMessage(
-                                                        chatId, null, replyTo, null, null, content
-                                                    )
-                                                ) { result ->
-                                                    if (result is TdApi.Message) {
-                                                        onSent()
-                                                        // 清理草稿
-                                                        TgClient.send(TdApi.SetChatDraftMessage(chatId, null, null))
-                                                    } else {
-                                                        println("Failed to send media message: $result")
+                                        }
+                                        else -> {
+                                            // 媒体消息：URI → 本地路径 → InputMessagePhoto / InputMessageVideo
+                                            coroutineScope.launch {
+                                                val resolved = withContext(Dispatchers.IO) {
+                                                    pendingMedia.mapNotNull { item ->
+                                                        val uri = runCatching { item.path.toUri() }.getOrNull()
+                                                            ?: return@mapNotNull null
+                                                        val path = resolveContentUriToFile(context, uri)
+                                                            ?: return@mapNotNull null
+                                                        item.type to path
                                                     }
                                                 }
-                                            } else {
-                                                // 相册：caption 仅放在第一项；album 上限 10
-                                                val capped = resolved.take(10)
-                                                val contents = Array(capped.size) { idx ->
-                                                    val (type, path) = capped[idx]
-                                                    buildMediaInputMessage(
-                                                        type = type,
-                                                        path = path,
-                                                        caption = if (idx == 0) caption else null,
-                                                    )
+                                                if (resolved.isEmpty()) {
+                                                    Log.w("Page1", "No usable media files after resolving URIs")
+                                                    return@launch
                                                 }
-                                                TgClient.send(
-                                                    TdApi.SendMessageAlbum(
-                                                        chatId, null, replyTo, null, contents
-                                                    )
-                                                ) { result ->
-                                                    if (result is TdApi.Messages) {
-                                                        onSent()
-                                                        // 清理草稿
-                                                        TgClient.send(TdApi.SetChatDraftMessage(chatId, null, null))
-                                                    } else {
-                                                        println("Failed to send album: $result")
+                                                val caption = if (captionText.isBlank()) null
+                                                else TdApi.FormattedText(captionText, null)
+
+                                                if (resolved.size == 1) {
+                                                    val (type, path) = resolved[0]
+                                                    val content = buildMediaInputMessage(type, path, caption)
+                                                    TgClient.send(
+                                                        TdApi.SendMessage(
+                                                            chatId, null, replyTo, null, null, content
+                                                        )
+                                                    ) { result ->
+                                                        if (result is TdApi.Message) {
+                                                            onSent()
+                                                            // 清理草稿
+                                                            TgClient.send(TdApi.SetChatDraftMessage(chatId, null, null))
+                                                        } else {
+                                                            println("Failed to send media message: $result")
+                                                        }
+                                                    }
+                                                } else {
+                                                    // 相册：caption 仅放在第一项；album 上限 10
+                                                    val capped = resolved.take(10)
+                                                    val contents = Array(capped.size) { idx ->
+                                                        val (type, path) = capped[idx]
+                                                        buildMediaInputMessage(
+                                                            type = type,
+                                                            path = path,
+                                                            caption = if (idx == 0) caption else null,
+                                                        )
+                                                    }
+                                                    TgClient.send(
+                                                        TdApi.SendMessageAlbum(
+                                                            chatId, null, replyTo, null, contents
+                                                        )
+                                                    ) { result ->
+                                                        if (result is TdApi.Messages) {
+                                                            onSent()
+                                                            // 清理草稿
+                                                            TgClient.send(TdApi.SetChatDraftMessage(chatId, null, null))
+                                                        } else {
+                                                            println("Failed to send album: $result")
+                                                        }
                                                     }
                                                 }
                                             }
@@ -680,7 +826,6 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                                 }
                             },
                             modifier = Modifier.animateWidth(interactionSource2),
-                            transformation = SurfaceTransformation(transformationSpec),
                             interactionSource = interactionSource2,
                         ) {
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {

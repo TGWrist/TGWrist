@@ -5,6 +5,12 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
@@ -115,7 +121,7 @@ fun TestScreen() {
                         },
                         onLongClickLabel = "Select",
                         appName = {
-                            Text(if (selected1) "Selected" else "TG Wrist")
+                            Text("TG Wrist")
                         },
                         title = {
                             Text("Test title 1")
@@ -124,15 +130,19 @@ fun TestScreen() {
                             Text("Long press this card to select it.")
                         },
                         appImage = {
-                            Icon(
-                                imageVector = if (selected1) {
-                                    Icons.Rounded.CheckCircle
-                                } else {
-                                    Icons.AutoMirrored.Rounded.Chat
-                                },
-                                contentDescription = null,
-                                modifier = Modifier.size(CardDefaults.AppImageSize)
-                            )
+                            // 依然保留这个 Box 作为“定海神针”，锁死布局尺寸
+                            AnimatedVisibility(
+                                visible = selected1,
+                                enter = fadeIn(animationSpec = spring()),
+                                exit = fadeOut(animationSpec = spring()),
+                                label = "avatar_selection_animation"
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = "Selected",
+                                    modifier = Modifier.size(CardDefaults.AppImageSize)
+                                )
+                            }
                         },
                         time = {
                             Text("12:30")
@@ -176,7 +186,7 @@ fun TestScreen() {
                         },
                         onLongClickLabel = "Select",
                         appName = {
-                            Text(if (selected2) "Selected" else "TG Wrist")
+                            Text("TG Wrist")
                         },
                         title = {
                             Text("Test title 2")
@@ -185,15 +195,24 @@ fun TestScreen() {
                             Text("When selecting, tap this card to toggle it.")
                         },
                         appImage = {
-                            Icon(
-                                imageVector = if (selected2) {
-                                    Icons.Rounded.CheckCircle
-                                } else {
-                                    Icons.AutoMirrored.Rounded.Chat
+                            AnimatedContent(
+                                targetState = selected2,
+                                transitionSpec = {
+                                    fadeIn(animationSpec = spring()) togetherWith
+                                            fadeOut(animationSpec = spring())
                                 },
-                                contentDescription = null,
-                                modifier = Modifier.size(CardDefaults.AppImageSize)
-                            )
+                                label = "avatar_selection_animation"
+                            ) { selected ->
+                                Icon(
+                                    imageVector = if (selected) {
+                                        Icons.Rounded.CheckCircle
+                                    } else {
+                                        Icons.AutoMirrored.Rounded.Chat
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(CardDefaults.AppImageSize)
+                                )
+                            }
                         },
                         time = {
                             Text("12:31")
@@ -237,7 +256,7 @@ fun TestScreen() {
                         },
                         onLongClickLabel = "Select",
                         appName = {
-                            Text(if (selected3) "Selected" else "TG Wrist")
+                            Text("TG Wrist")
                         },
                         title = {
                             Text("Test title 3")
@@ -246,15 +265,24 @@ fun TestScreen() {
                             Text("If all cards are unselected, selection mode exits automatically.")
                         },
                         appImage = {
-                            Icon(
-                                imageVector = if (selected3) {
-                                    Icons.Rounded.CheckCircle
-                                } else {
-                                    Icons.AutoMirrored.Rounded.Chat
+                            AnimatedContent(
+                                targetState = selected3,
+                                transitionSpec = {
+                                    fadeIn(animationSpec = spring()) togetherWith
+                                            fadeOut(animationSpec = spring())
                                 },
-                                contentDescription = null,
-                                modifier = Modifier.size(CardDefaults.AppImageSize)
-                            )
+                                label = "avatar_selection_animation"
+                            ) { selected ->
+                                Icon(
+                                    imageVector = if (selected) {
+                                        Icons.Rounded.CheckCircle
+                                    } else {
+                                        Icons.AutoMirrored.Rounded.Chat
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(CardDefaults.AppImageSize)
+                                )
+                            }
                         },
                         time = {
                             Text("12:32")

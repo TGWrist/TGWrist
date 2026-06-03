@@ -37,4 +37,6 @@ data class MediaPickerItem(
     val isVideo: Boolean,
     /** 视频时长（毫秒），图片为 0 */
     val durationMs: Long = 0L,
+    /** MediaStore 入库时间戳，单位秒；用于稳定排序 */
+    val dateAdded: Long = 0L,
 )

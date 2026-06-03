@@ -6,7 +6,7 @@ import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.edit
 import com.tgwrist.app.data.ChatFolderInfo
-import com.tgwrist.app.data.ForwardMessage
+import com.tgwrist.app.data.ForwardMessages
 import com.tgwrist.app.data.ReplyMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,17 +47,6 @@ object Config {
             _isOpenNotification.value = value
         }
 
-    // 是否使用外部视频播放器（StateFlow 供 Compose 订阅）
-    private val _isNotUseBuiltVideoPlayer = MutableStateFlow(false)
-    val isNotUseBuiltVideoPlayerFlow = _isNotUseBuiltVideoPlayer.asStateFlow()
-
-    var isNotUseBuiltVideoPlayer: Boolean
-        get() = _isNotUseBuiltVideoPlayer.value
-        set(value) {
-            prefs.edit { putBoolean("isNotUseBuiltVideoPlayer", value) }
-            _isNotUseBuiltVideoPlayer.value = value
-        }
-
     // 回复消息信息记录
     private val _replyMessage = MutableStateFlow<ReplyMessage?>(null)
     val replyMessageFlow = _replyMessage.asStateFlow()
@@ -68,12 +57,12 @@ object Config {
         }
 
     // 待转发消息记录
-    private val _forwardMessage = MutableStateFlow<ForwardMessage?>(null)
-    val forwardMessageFlow = _forwardMessage.asStateFlow()
-    var forwardMessage: ForwardMessage?
-        get() = _forwardMessage.value
+    private val _forwardMessages = MutableStateFlow<ForwardMessages?>(null)
+    val forwardMessagesFlow = _forwardMessages.asStateFlow()
+    var forwardMessages: ForwardMessages?
+        get() = _forwardMessages.value
         set(value) {
-            _forwardMessage.value = value
+            _forwardMessages.value = value
         }
 
     // 当前登录用户信息
@@ -115,7 +104,6 @@ object Config {
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         _isOpenNotification.value = prefs.getBoolean("isOpenNotification", false)
-        _isNotUseBuiltVideoPlayer.value = prefs.getBoolean("isNotUseBuiltVideoPlayer", false)
 
         // 订阅连接状态更新
         // 订阅连接状态更新

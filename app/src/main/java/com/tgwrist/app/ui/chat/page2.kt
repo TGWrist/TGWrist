@@ -916,7 +916,10 @@ fun Page2(chatObject: TdApi.Chat?) {
                         onClick = {
                             navController?.navigate(Destinations.textView(groupDescription ?: ""))
                         },
-                        onLongClick = {},
+                        onLongClick = {
+                            context.setClipboardText(groupDescription ?: "", "Description")
+                            Toast.makeText(context, copiedClipboard, Toast.LENGTH_SHORT).show()
+                        },
                         transformation = SurfaceTransformation(transformationSpec),
                         modifier = Modifier
                             .fillMaxWidth()

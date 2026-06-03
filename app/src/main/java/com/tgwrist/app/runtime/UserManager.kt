@@ -7,6 +7,7 @@ import com.google.gson.reflect.TypeToken
 import com.tgwrist.app.data.UserInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import androidx.core.content.edit
 import com.tgwrist.app.data.UserInfoEvent
 
@@ -65,22 +66,24 @@ object UserManager {
      * @return 创建的 UserInfo 对象
      */
     fun addUser(userId: Long, userName: String): UserInfo {
-        val existing = _users.value.find { it.userId == userId }
-        if (existing != null) {
-            // 覆盖原有用户名
-            _users.value = _users.value.map {
-                if (it.userId == userId) it.copy(userName = userName) else it
+        var result: UserInfo? = null
+        _users.update { current ->
+            val existing = current.find { it.userId == userId }
+            if (existing != null) {
+                // 覆盖原有用户名
+                result = existing.copy(userName = userName)
+                current.map {
+                    if (it.userId == userId) it.copy(userName = userName) else it
+                }
+            } else {
+                val shouldActive = current.isEmpty()
+                val newUser = UserInfo(userId, userName, shouldActive)
+                result = newUser
+                current + newUser
             }
-            saveUsers()
-            return existing.copy(userName = userName)
         }
-
-        val shouldActive = _users.value.isEmpty()
-        val newUser = UserInfo(userId, userName, shouldActive)
-
-        _users.value += newUser
         saveUsers()
-        return newUser
+        return result!!
     }
 
     /**
@@ -90,12 +93,19 @@ object UserManager {
      * @return 更新后的 UserInfo，如果用户不存在则返回 null
      */
     fun updateUserName(userId: Long, newName: String): UserInfo? {
-        val existing = _users.value.find { it.userId == userId } ?: return null
-        _users.value = _users.value.map {
-            if (it.userId == userId) it.copy(userName = newName) else it
+        var result: UserInfo? = null
+        _users.update { current ->
+            if (current.none { it.userId == userId }) return@update current
+            current.map {
+                if (it.userId == userId) {
+                    it.copy(userName = newName).also { updated -> result = updated }
+                } else {
+                    it
+                }
+            }
         }
         saveUsers()
-        return existing.copy(userName = newName)
+        return result
     }
 
     /**
@@ -117,14 +127,16 @@ object UserManager {
     fun switchActiveUser(userId: Long) {
         val targetUser = _users.value.find { it.userId == userId } ?: return
 
-        _users.value = _users.value.map {
-            it.copy(isActive = it.userId == userId)
+        _users.update { current ->
+            current.map {
+                it.copy(isActive = it.userId == userId)
+            }
         }
 
-        // 发送用户切换事件
-        GlobalEventBus.send(UserInfoEvent(targetUser.copy(isActive = true), ActiveUserSwitch))
-
         saveUsers()
+
+        // 发送用户切换事件（副作用放在原子更新之外，避免重试时重复发送）
+        GlobalEventBus.send(UserInfoEvent(targetUser.copy(isActive = true), ActiveUserSwitch))
     }
 
     /**
@@ -132,14 +144,15 @@ object UserManager {
      * @param userId 要删除的用户 ID
      */
     fun removeUser(userId: Long) {
-        val newList = _users.value.filterNot { it.userId == userId }
-
-        _users.value = if (newList.isNotEmpty() && newList.none { it.isActive }) {
-            newList.mapIndexed { index, user ->
-                user.copy(isActive = index == 0)
+        _users.update { current ->
+            val newList = current.filterNot { it.userId == userId }
+            if (newList.isNotEmpty() && newList.none { it.isActive }) {
+                newList.mapIndexed { index, user ->
+                    user.copy(isActive = index == 0)
+                }
+            } else {
+                newList
             }
-        } else {
-            newList
         }
 
         saveUsers()
@@ -155,16 +168,19 @@ object UserManager {
      */
     fun updatePushReceiverId(userId: Long? = null, pushReceiverId: Long): UserInfo? {
         val targetUserId = userId ?: getActiveUser()?.userId ?: return null
-        val existing = _users.value.find { it.userId == targetUserId } ?: return null
-
-        val updated = existing.copy(pushReceiverId = pushReceiverId)
-
-        _users.value = _users.value.map {
-            if (it.userId == targetUserId) updated else it
+        var result: UserInfo? = null
+        _users.update { current ->
+            if (current.none { it.userId == targetUserId }) return@update current
+            current.map {
+                if (it.userId == targetUserId) {
+                    it.copy(pushReceiverId = pushReceiverId).also { updated -> result = updated }
+                } else {
+                    it
+                }
+            }
         }
         saveUsers()
-
-        return updated
+        return result
     }
 
     /**

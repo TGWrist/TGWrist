@@ -3,7 +3,6 @@ package com.tgwrist.app.ui.message.info
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Forward
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Translate
@@ -14,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.FilledTonalButton
@@ -24,10 +24,10 @@ import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
 import com.tgwrist.app.data.AlertDialogItem
-import com.tgwrist.app.data.ForwardMessage
+import com.tgwrist.app.data.ForwardMessages
 import com.tgwrist.app.data.ReplyMessage
-import com.tgwrist.app.runtime.Config.forwardMessage
-import com.tgwrist.app.runtime.Config.forwardMessageFlow
+import com.tgwrist.app.runtime.Config.forwardMessages
+import com.tgwrist.app.runtime.Config.forwardMessagesFlow
 import com.tgwrist.app.runtime.Config.replyMessage
 import com.tgwrist.app.runtime.Config.replyMessageFlow
 import com.tgwrist.app.runtime.TgClient
@@ -135,43 +135,44 @@ fun ForwardMessageButton(
     properties: TdApi.MessageProperties?,
     message: TdApi.Message
 ) {
-    val forwardMsg = forwardMessageFlow.collectAsState()
-    val isSelected = forwardMsg.value?.chatId == message.chatId && forwardMsg.value?.messageIds?.contains(message.id) == true
+    val canBeForwarded = properties?.canBeForwarded ?: true
+    val canBeCopied = properties?.canBeCopied ?: false
+    val forwardMsgs by forwardMessagesFlow.collectAsState()
+    val isSelected = forwardMsgs?.chatId == message.chatId && forwardMsgs?.messageIds?.contains(message.id) == true
 
     FilledTonalButton(
         onClick = {
-            forwardMessage = if (isSelected) {
+            forwardMessages = if (isSelected) {
                 null
             } else {
-                val currentForward = forwardMsg.value
-
                 // 如果当前已有转发任务，且 chatId 对应得上，就在原基础上叠加 messageId
-                if (currentForward != null && currentForward.chatId == message.chatId) {
-                    currentForward.copy(
+                if (forwardMsgs != null && forwardMsgs!!.chatId == message.chatId) {
+                    forwardMsgs!!.copy(
                         // 使用 + 运算符，会创建一个包含新元素的新 List 对象，触发 UI 刷新
-                        messageIds = currentForward.messageIds + message.id
+                        messageIds = forwardMsgs!!.messageIds + message.id
                     )
                 } else {
                     // 创建全新的转发任务
-                    ForwardMessage(
+                    ForwardMessages(
                         chatId = message.chatId,
                         messageIds = listOf(message.id),
-                        canBeCopied = properties?.canBeCopied ?: true,
-                        canBeForwarded = properties?.canBeForwarded ?: false
+                        canBeCopied = canBeCopied,
+                        canBeForwarded = canBeForwarded
                     )
                 }
             }
         },
         label = {
             Text(
-                text = if (isSelected) stringResource(R.string.Forward_selected) else stringResource(R.string.Forward),
+                text = if (isSelected) stringResource(R.string.Forward_selected) else
+                    if (forwardMsgs == null || forwardMsgs!!.chatId != message.chatId) stringResource(R.string.Forward) else stringResource(R.string.Add_forward),
                 style = MaterialTheme.typography.labelSmall
             )
         },
         icon = {
             Icon(
-                imageVector = Icons.AutoMirrored.Rounded.Forward,
-                contentDescription = "Forward"
+                painter = painterResource(R.drawable.ic_forward),
+                contentDescription = null
             )
         },
         colors = if (isSelected) {

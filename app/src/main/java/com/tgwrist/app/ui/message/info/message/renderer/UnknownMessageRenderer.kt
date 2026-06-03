@@ -27,6 +27,7 @@ import com.google.firebase.analytics.analytics
 import com.google.firebase.analytics.logEvent
 import com.tgwrist.app.R
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import org.drinkless.tdlib.TdApi
@@ -89,6 +90,14 @@ fun UnknownMessageRenderer(content: TdApi.MessageContent? = null, messageRenderC
                     properties = messageRenderContext.properties,
                     message = messageRenderContext.message
                 )
+
+                // 转发按钮
+                ForwardMessageButton(
+                    modifier = Modifier.padding(top = 8.dp),
+                    properties = messageRenderContext.properties,
+                    message = messageRenderContext.message
+                )
+
                 // 删除按钮
                 if (messageRenderContext.chat != null) {
                     DeleteMessageButton(

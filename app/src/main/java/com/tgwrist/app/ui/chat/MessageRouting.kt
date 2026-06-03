@@ -33,7 +33,9 @@ fun MessageRouting(
     chatObject: TdApi.Chat,
     lastReadOutboxMessageId: Long = 0L,
     transformation: SurfaceTransformation?,
-    onClick: () -> Unit
+    selected: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
     val msg = msgList.singleOrNull()
     val youString = stringResource(R.string.You)
@@ -340,7 +342,9 @@ fun MessageRouting(
                 chatObject = chatObject,
                 lastReadOutboxMessageId = lastReadOutboxMessageId,
                 transformation = transformation,
-                onClick = onClick
+                selected = selected,
+                onClick = onClick,
+                onLongClick = onLongClick
             )
         }
     }
@@ -571,7 +575,7 @@ fun BlueCircleChar(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge, // 大字体现在有空间了！
+            style = MaterialTheme.typography.titleSmall, // 大字体现在有空间了！
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

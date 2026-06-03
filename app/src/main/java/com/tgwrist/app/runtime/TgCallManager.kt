@@ -403,15 +403,9 @@ object TgCallManager {
                             CallForegroundService.stop(ctx)
                         }
                         CALL_STATE_INCOMING -> {
-                            if (Config.isMainActivityOnFront) {
-                                // Activity 在前台，可以直接用有麦克风权限的服务
-                                IncomingCallNotificationService.stop(ctx)
-                                CallForegroundService.start(ctx, title, text)
-                            } else {
-                                // 后台收到来电：用轻量服务（无麦克风权限，FCM 高优先级豆免内合法）
-                                CallForegroundService.stop(ctx)
-                                IncomingCallNotificationService.start(ctx, title, text)
-                            }
+                            // 来电使用用轻量服务（无麦克风权限）
+                            CallForegroundService.stop(ctx)
+                            IncomingCallNotificationService.start(ctx, title, text)
                         }
                         CALL_STATE_CALLING -> {
                             // 用户已接听：必须切换到有麦克风权限的服务，否则没有声音

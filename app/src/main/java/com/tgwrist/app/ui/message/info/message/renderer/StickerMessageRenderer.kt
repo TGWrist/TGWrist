@@ -57,6 +57,7 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.tgwrist.app.R
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import kotlinx.coroutines.Dispatchers
@@ -370,12 +371,21 @@ fun StickerMessageRenderer(
 
             //Spacer(modifier = Modifier.height(12.dp))
 
+            // 回复按钮
             ReplyMessageButton(
                 modifier = Modifier.padding(top = 4.dp),
                 properties = messageRenderContext.properties,
                 message = messageRenderContext.message
             )
 
+            // 转发按钮
+            ForwardMessageButton(
+                modifier = Modifier.padding(top = 8.dp),
+                properties = messageRenderContext.properties,
+                message = messageRenderContext.message
+            )
+
+            // 删除按钮
             if (messageRenderContext.chat != null) {
                 DeleteMessageButton(
                     modifier = Modifier.padding(top = 8.dp),

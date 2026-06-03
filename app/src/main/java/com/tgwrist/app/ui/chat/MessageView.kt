@@ -1,5 +1,12 @@
 package com.tgwrist.app.ui.chat
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
@@ -8,6 +15,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.HistoryToggleOff
 import androidx.compose.runtime.Composable
@@ -36,9 +44,9 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
-import com.tgwrist.app.ui.ThumbnailChatPhoto
 import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.ui.ThumbnailChatPhoto
 import com.tgwrist.app.utils.handleAllMessages
 import com.tgwrist.app.utils.time
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -52,7 +60,9 @@ fun MessageView(
     chatObject: TdApi.Chat,
     lastReadOutboxMessageId: Long = 0L,
     transformation: SurfaceTransformation?,
-    onClick: () -> Unit
+    selected: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val youString = stringResource(id = R.string.You)
@@ -239,7 +249,25 @@ fun MessageView(
 
     AppCard(
         onClick = { onClick.invoke() },
+        onLongClick = onLongClick,
+        onLongClickLabel = "Select",
         transformation = transformation,
+        colors = if (selected) {
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                appNameColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                titleColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                timeColor = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        } else {
+            CardDefaults.cardColors()
+        },
+        border = if (selected) {
+            BorderStroke(width = 1.dp, color = MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        },
         appName = {
             if (isYou || representMessage?.isOutgoing == true) {
                 Row(
@@ -280,17 +308,46 @@ fun MessageView(
             }
         },
         appImage = {
-            if (!isYou) {
-                ThumbnailChatPhoto(
-                    thumbnail = chatPhoto.value, // 这里传入的是 State 的当前值
-                    title = senderName.value,
-                    accentColorId = accentColorId.intValue,
-                    contentDescription = "Chat Photo",
-                    modifier = Modifier
-                        .size(CardDefaults.AppImageSize)
-                        .clip(CircleShape)
-                        .wrapContentSize(align = Alignment.Center)
-                )
+            if (isYou) {
+                AnimatedVisibility(
+                    visible = selected,
+                    enter = fadeIn(animationSpec = spring()),
+                    exit = fadeOut(animationSpec = spring()),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = "Selected",
+                        modifier = Modifier.size(CardDefaults.AppImageSize)
+                    )
+                }
+            } else {
+                AnimatedContent(
+                    targetState = selected,
+                    transitionSpec = {
+                        fadeIn(animationSpec = spring()) togetherWith
+                                fadeOut(animationSpec = spring())
+                    },
+                    label = "avatar_selection_animation"
+                ) { selected ->
+                    if (selected) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(CardDefaults.AppImageSize)
+                        )
+                    } else {
+                        ThumbnailChatPhoto(
+                            thumbnail = chatPhoto.value, // 这里传入的是 State 的当前值
+                            title = senderName.value,
+                            accentColorId = accentColorId.intValue,
+                            contentDescription = "Chat Photo",
+                            modifier = Modifier
+                                .size(CardDefaults.AppImageSize)
+                                .clip(CircleShape)
+                                .wrapContentSize(align = Alignment.Center)
+                        )
+                    }
+                }
             }
         },
         title = {

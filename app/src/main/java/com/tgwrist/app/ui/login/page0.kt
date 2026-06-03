@@ -100,13 +100,15 @@ fun Page0(nextPage: () -> Unit) {
                     nextPage.invoke()
                 },
                 buttonSize = EdgeButtonSize.Medium,
-                colors = ButtonDefaults.buttonColors(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDDDFFD)),
                 modifier =
+                    // 如果用户开始从EdgeButton滚动
                     Modifier.scrollable(
                         listState,
                         orientation = Orientation.Vertical,
                         reverseDirection = true,
-                        overscrollEffect = rememberOverscrollEffect(),
+                        // 应对EdgeButton应用超滚动效果以适当调整滚动行为
+                        overscrollEffect = overscroll,
                     ),
             ) {
                 Icon(Icons.Rounded.ChevronRight, contentDescription = "go")

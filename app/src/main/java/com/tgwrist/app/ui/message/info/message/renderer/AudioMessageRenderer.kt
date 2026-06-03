@@ -73,6 +73,7 @@ import coil.size.Size
 import com.tgwrist.app.R
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.TranslationButton
@@ -187,10 +188,11 @@ fun AudioMessageRenderer(
     var savedFilePath by remember { mutableStateOf("") }
 
     // 播放状态
-    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-    var isPlaying by remember { mutableStateOf(false) }
-    var playbackPositionMs by remember { mutableIntStateOf(0) }
-    var playbackDurationMs by remember { mutableIntStateOf(duration * 1000) }
+    var mediaPlayer by remember(fileId) { mutableStateOf<MediaPlayer?>(null) }
+    var isPlaying by remember(fileId) { mutableStateOf(false) }
+    var isPreparing by remember(fileId) { mutableStateOf(false) }
+    var playbackPositionMs by remember(fileId) { mutableIntStateOf(0) }
+    var playbackDurationMs by remember(fileId) { mutableIntStateOf(duration * 1000) }
 
     // ========== 初始化文件状态 ==========
     LaunchedEffect(fileId) {
@@ -311,7 +313,7 @@ fun AudioMessageRenderer(
     }
 
     fun togglePlayback() {
-        if (fileLocalPath.isBlank()) return
+        if (fileLocalPath.isBlank() || isPreparing) return
         val current = mediaPlayer
         if (current != null) {
             runCatching {
@@ -325,6 +327,7 @@ fun AudioMessageRenderer(
             }
             return
         }
+        isPreparing = true
         coroutineScope.launch {
             val mp = withContext(Dispatchers.IO) {
                 runCatching {
@@ -334,6 +337,7 @@ fun AudioMessageRenderer(
                     }
                 }.getOrNull()
             }
+            isPreparing = false
             if (mp == null) {
                 Toast.makeText(context, strPlayFailed, Toast.LENGTH_SHORT).show()
                 return@launch
@@ -774,6 +778,16 @@ fun AudioMessageRenderer(
             // 回复按钮
             item {
                 ReplyMessageButton(
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
+                    surfaceTransformation = SurfaceTransformation(transformationSpec),
+                    properties = messageRenderContext.properties,
+                    message = messageRenderContext.message
+                )
+            }
+
+            // 转发按钮
+            item {
+                ForwardMessageButton(
                     modifier = Modifier.transformedHeight(this, transformationSpec),
                     surfaceTransformation = SurfaceTransformation(transformationSpec),
                     properties = messageRenderContext.properties,

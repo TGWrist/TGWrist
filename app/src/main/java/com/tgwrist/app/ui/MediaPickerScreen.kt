@@ -173,6 +173,9 @@ fun MediaPickerScreen() {
                     selected.add(item.uri)
                     maxReachedHint = false
                 }
+            } else {
+                // 原本已选中，现在成功取消勾选
+                maxReachedHint = false
             }
         } else {
             finishWith(listOf(item))
@@ -511,7 +514,10 @@ private fun queryMedia(context: Context, type: MediaPickerType): List<MediaPicke
         MediaPickerType.IMAGE_ONLY -> queryImages(context)
         MediaPickerType.VIDEO_ONLY -> queryVideos(context)
         MediaPickerType.IMAGE_AND_VIDEO -> queryImages(context) + queryVideos(context)
-    }.sortedByDescending { it.uri.lastPathSegment?.toLongOrNull() ?: 0L }
+    }.sortedWith(
+        compareByDescending<MediaPickerItem> { it.dateAdded }
+            .thenByDescending { it.uri.lastPathSegment?.toLongOrNull() ?: 0L }
+    )
 }
 
 private fun queryImages(context: Context): List<MediaPickerItem> {
@@ -525,10 +531,12 @@ private fun queryImages(context: Context): List<MediaPickerItem> {
     runCatching {
         context.contentResolver.query(collection, projection, null, null, sort)?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+            val dateCol = cursor.getColumnIndex(MediaStore.Images.Media.DATE_ADDED)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 val uri = ContentUris.withAppendedId(collection, id)
-                result.add(MediaPickerItem(uri = uri, isVideo = false))
+                val dateAdded = if (dateCol >= 0) cursor.getLong(dateCol) else 0L
+                result.add(MediaPickerItem(uri = uri, isVideo = false, dateAdded = dateAdded))
             }
         }
     }
@@ -547,12 +555,21 @@ private fun queryVideos(context: Context): List<MediaPickerItem> {
     runCatching {
         context.contentResolver.query(collection, projection, null, null, sort)?.use { cursor ->
             val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+            val dateCol = cursor.getColumnIndex(MediaStore.Video.Media.DATE_ADDED)
             val durCol = cursor.getColumnIndex(MediaStore.Video.Media.DURATION)
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
                 val uri = ContentUris.withAppendedId(collection, id)
+                val dateAdded = if (dateCol >= 0) cursor.getLong(dateCol) else 0L
                 val duration = if (durCol >= 0) cursor.getLong(durCol) else 0L
-                result.add(MediaPickerItem(uri = uri, isVideo = true, durationMs = duration))
+                result.add(
+                    MediaPickerItem(
+                        uri = uri,
+                        isVideo = true,
+                        durationMs = duration,
+                        dateAdded = dateAdded,
+                    )
+                )
             }
         }
     }

@@ -137,11 +137,16 @@ object TdLibInitManage {
                                             UserManager.addUser(it.id, "${it.firstName} ${it.lastName}")
                                             UserManager.switchActiveUser(it.id)
 
+                                            // 必须在 init() 之前置 false：
+                                            // init() 是异步的，会从其他线程回调 WaitTdlibParameters，
+                                            // 该回调依赖 isPageOnLogin 决定加载用户目录还是全新目录。
+                                            // 性能好的设备上回调会抢在这一步之前执行，导致用错目录、登录丢失。
+                                            isPageOnLogin.value = false
+
                                             // 重新初始化
                                             TgClient.init()
                                             // 登录完成
                                             println("Login success")
-                                            isPageOnLogin.value = false
                                             navigateToHomeAndClearStack()
                                             Firebase.analytics.logEvent(FirebaseAnalytics.Event.LOGIN, null)
                                         } catch (e: Exception) {
