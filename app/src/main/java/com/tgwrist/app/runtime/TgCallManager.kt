@@ -319,7 +319,7 @@ object TgCallManager {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             audioManager.addOnCommunicationDeviceChangedListener(
                 TGWrist.context.mainExecutor,
-                communicationDeviceListener,
+                communicationDeviceListener!!,
             )
         } else {
             // API 31+ 已用 OnCommunicationDeviceChangedListener,只在更老的设备上注册
@@ -343,8 +343,11 @@ object TgCallManager {
         }
     }
 
-    private val communicationDeviceListener =
-        AudioManager.OnCommunicationDeviceChangedListener { refreshAudioOutput() }
+    private val communicationDeviceListener by lazy {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AudioManager.OnCommunicationDeviceChangedListener { refreshAudioOutput() }
+        } else null
+    }
 
     private val scoReceiver = object : BroadcastReceiver() {
         @Suppress("DEPRECATION")

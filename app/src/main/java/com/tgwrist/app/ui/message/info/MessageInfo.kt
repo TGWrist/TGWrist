@@ -78,7 +78,7 @@ import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
-fun MessageInfo(chatId: Long, msgIdList: List<Long>) {
+fun MessageInfo(chatId: Long, msgIdList: List<Long>, showMsgsInfo: Boolean = true) {
     val context = LocalContext.current
     val appState = LocalGlobalAppState.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -233,7 +233,7 @@ fun MessageInfo(chatId: Long, msgIdList: List<Long>) {
         return
     }
 
-    val pagerState = rememberPagerState(initialPage = 0) { messages.size + 1 }
+    val pagerState = rememberPagerState(initialPage = 0) { messages.size + if (showMsgsInfo) 1 else 0 }
 
     AppScaffold(timeText = { StatusTimeText() }) {
         // Dialog 提示

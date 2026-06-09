@@ -29,10 +29,12 @@ import androidx.wear.compose.material3.ScrollIndicator
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.EditMessageTextButton
 import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.TranslationButton
+import com.tgwrist.app.ui.message.info.message.EditTextModelView
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import org.drinkless.tdlib.TdApi
 
@@ -46,6 +48,9 @@ fun TextMessageRenderer(
     val focusRequester = remember { FocusRequester() }
     // 只有当最大滚动值 > 0 时，才认为需要显示滚动条
     val isScrollable = scrollState.maxValue > 0
+
+    val isEditing = remember { mutableStateOf(false) }
+    val editText = remember { mutableStateOf("") }
 
     var translatedText by remember { mutableStateOf<TdApi.FormattedText?>(null) }
 
@@ -69,12 +74,16 @@ fun TextMessageRenderer(
                 .padding(contentPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            MessageTextView(
-                text = content.text.text,
-                entities = content.text.entities,
-                modifier = Modifier,
-                navController = navController,
-            )
+            if (isEditing.value) {
+                EditTextModelView(editText, isEditing, messageRenderContext)
+            } else {
+                MessageTextView(
+                    text = content.text.text,
+                    entities = content.text.entities,
+                    modifier = Modifier,
+                    navController = navController,
+                )
+            }
 
             translatedText?.let {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -99,8 +108,26 @@ fun TextMessageRenderer(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // 编辑按钮
+            if (messageRenderContext.properties?.canBeEdited == true) {
+                EditMessageTextButton(
+                    properties = messageRenderContext.properties,
+                    isEditing = isEditing,
+                    onClick = {
+                        if (isEditing.value) {
+                            isEditing.value = false
+                            editText.value = ""
+                        } else {
+                            editText.value = content.text.text
+                            isEditing.value = true
+                        }
+                    }
+                )
+            }
+
             // 翻译按钮
             TranslationButton(
+                modifier = Modifier.padding(top = 8.dp),
                 text = content.text,
                 onDone = {
                     translatedText = it

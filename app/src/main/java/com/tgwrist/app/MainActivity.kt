@@ -19,17 +19,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import androidx.wear.compose.material3.AlertDialog
+import androidx.wear.compose.material3.AlertDialogDefaults
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavHostState
 import androidx.work.WorkManager
+import com.tgwrist.app.data.AlertDialogItem
 import com.tgwrist.app.data.SharedMessageInfoKey
 import com.tgwrist.app.runtime.CALL_STATE_NONE
 import com.tgwrist.app.runtime.Config
@@ -58,6 +62,7 @@ import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.MainViewModel
 import com.tgwrist.app.utils.WifiNetworkRequester
 import com.tgwrist.app.utils.getAppVersion
+import com.tgwrist.app.utils.handleUrlNavigation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import org.drinkless.tdlib.TdApi
@@ -69,6 +74,7 @@ class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private var pendingOpenChatId by mutableLongStateOf(-1L)
     private var openCallPage by mutableStateOf(false)
+    private var pendingDeepLinkUrl by mutableStateOf<String?>(null)
     private lateinit var wifiRequester: WifiNetworkRequester // 声明一个 wifiRequester 属性，但不初始化
 
     override fun onNewIntent(intent: Intent) {
@@ -76,6 +82,9 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         pendingOpenChatId = intent.getLongExtra("chatId", -1L)
         if (intent.getBooleanExtra("openCallPage", false)) openCallPage = true
+        if (intent.action == Intent.ACTION_VIEW) {
+            intent.dataString?.let { pendingDeepLinkUrl = it }
+        }
     }
 
     override fun onDestroy() {
@@ -158,6 +167,9 @@ class MainActivity : ComponentActivity() {
         // 赋值传入的chatId
         pendingOpenChatId = intent?.getLongExtra("chatId", -1L) ?: -1L
         openCallPage = intent?.getBooleanExtra("openCallPage", false) ?: false
+        if (intent?.action == Intent.ACTION_VIEW) {
+            pendingDeepLinkUrl = intent?.dataString
+        }
 
         // 让 Activity 能够在锁屏上显示，并点亮手表的屏幕
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -170,6 +182,7 @@ class MainActivity : ComponentActivity() {
             val navController = rememberSwipeDismissableNavController()
             val swipeState = rememberSwipeDismissableNavHostState()
             val lifecycleOwner = LocalLifecycleOwner.current
+            val context = LocalContext.current
             val isCalling by TgCallManager.callState.collectAsState()
 
             // 初始化“数据共享区域”
@@ -177,6 +190,10 @@ class MainActivity : ComponentActivity() {
             appState.navController = navController
             // 获取当前用户信息
             val userInfo = UserManager.getActiveUser()
+
+            // 全局对话框宿主状态：任意非 Composable 代码可通过 GlobalEventBus.send(AlertDialogItem(...)) 弹窗
+            var isShowGlobalDialog by remember { mutableStateOf(false) }
+            var globalDialogItem by remember { mutableStateOf(AlertDialogItem()) }
 
             // 获取是否打开预先传入会话
             var consumedChatId by rememberSaveable { mutableLongStateOf(-1L) }
@@ -232,6 +249,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // 处理 tg:// 等深链接跳转
+            LaunchedEffect(pendingDeepLinkUrl, userInfo) {
+                val url = pendingDeepLinkUrl
+                if (userInfo != null && url != null) {
+                    pendingDeepLinkUrl = null
+                    intent.data = null
+                    handleUrlNavigation(url, context, navController)
+                }
+            }
+
             LaunchedEffect(Unit) {
                 GlobalEventBus.subscribe<String>(
                     scope = this,
@@ -247,10 +274,50 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // 订阅全局对话框事件：任意代码 GlobalEventBus.send(AlertDialogItem(...)) 即可弹窗
+            LaunchedEffect(Unit) {
+                GlobalEventBus.subscribe<AlertDialogItem>(
+                    scope = this,
+                    lifecycleOwner = lifecycleOwner
+                ) { item ->
+                    globalDialogItem = item
+                    isShowGlobalDialog = true
+                }
+            }
+
             // Routes和UI
             TGWristTheme {
                 // 注入数据共享
                 CompositionLocalProvider(LocalGlobalAppState provides appState) {
+                    // 全局对话框宿主：覆盖在所有页面之上，由 GlobalEventBus.send(AlertDialogItem(...)) 触发
+                    AlertDialog(
+                        visible = isShowGlobalDialog,
+                        onDismissRequest = {
+                            globalDialogItem.onDismissRequest()
+                            isShowGlobalDialog = false
+                        },
+                        confirmButton = {
+                            AlertDialogDefaults.ConfirmButton(
+                                onClick = {
+                                    globalDialogItem.confirmButton()
+                                    isShowGlobalDialog = false
+                                }
+                            )
+                        },
+                        title = globalDialogItem.title,
+                        modifier = globalDialogItem.modifier,
+                        icon = globalDialogItem.icon,
+                        text = globalDialogItem.text,
+                        verticalArrangement = globalDialogItem.verticalArrangement,
+                        contentPadding = globalDialogItem.contentPadding ?: if (globalDialogItem.icon != null) {
+                            AlertDialogDefaults.confirmDismissWithIconContentPadding()
+                        } else {
+                            AlertDialogDefaults.confirmDismissContentPadding()
+                        },
+                        properties = globalDialogItem.properties,
+                        content = globalDialogItem.content,
+                    )
+
                     // 跨页面UI元素流动
                     SharedTransitionLayout {
                         SwipeDismissableNavHost(
@@ -340,11 +407,16 @@ class MainActivity : ComponentActivity() {
                                 route = Destinations.MESSAGE_INFO,
                                 arguments = listOf(
                                     navArgument("chatId") { type = NavType.LongType },
-                                    navArgument("key") { type = NavType.LongType }
+                                    navArgument("key") { type = NavType.LongType },
+                                    navArgument("showMsgsInfo") {
+                                        type = NavType.BoolType
+                                        defaultValue = true
+                                    }
                                 )
-                            ) {
-                                val chatId = it.arguments?.getLong("chatId")
-                                val key = it.arguments?.getLong("key")
+                            ) { backStackEntry ->
+                                val chatId = backStackEntry.arguments?.getLong("chatId")
+                                val showMsgsInfo = backStackEntry.arguments?.getBoolean("showMsgsInfo") ?: true
+                                val key = backStackEntry.arguments?.getLong("key")
                                 if (chatId == null || key == null) {
                                     return@composable
                                 }
@@ -355,7 +427,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                     return@composable
                                 }
-                                MessageInfo(chatId, sharedData.msgIdList)
+                                MessageInfo(chatId, sharedData.msgIdList, showMsgsInfo)
                             }
 
                             // 通话页面

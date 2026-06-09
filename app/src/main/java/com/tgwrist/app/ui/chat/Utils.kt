@@ -217,9 +217,9 @@ private fun formatVoiceDuration(ms: Long): String {
 @Composable
 fun CustomTextInput(
     modifier: Modifier = Modifier,
-    chatId: Long,
+    chatId: Long = -1L,
     text: String,
-    onTextChange: (String) -> Unit,
+    onTextChange: (String) -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -251,20 +251,24 @@ fun CustomTextInput(
             // 记录键盘打开的时间，避免敲击第一个字时重复发送
             lastTypingTime = System.currentTimeMillis()
 
-            TgClient.send(TdApi.SendChatAction(
-                chatId,
-                null,
-                null,
-                TdApi.ChatActionTyping()
-            ))
+            if (chatId != -1L) {
+                TgClient.send(TdApi.SendChatAction(
+                    chatId,
+                    null,
+                    null,
+                    TdApi.ChatActionTyping()
+                ))
+            }
         },
         onImeClose = {
-            TgClient.send(TdApi.SendChatAction(
-                chatId,
-                null,
-                null,
-                null
-            ))
+            if (chatId != -1L) {
+                TgClient.send(TdApi.SendChatAction(
+                    chatId,
+                    null,
+                    null,
+                    null
+                ))
+            }
         },
     )
 
@@ -294,12 +298,14 @@ fun CustomTextInput(
                     lastTypingTime = currentTime
 
                     // 发送 Typing 状态
-                    TgClient.send(TdApi.SendChatAction(
-                        chatId,
-                        null,
-                        null,
-                        TdApi.ChatActionTyping()
-                    ))
+                    if (chatId != -1L) {
+                        TgClient.send(TdApi.SendChatAction(
+                            chatId,
+                            null,
+                            null,
+                            TdApi.ChatActionTyping()
+                        ))
+                    }
                 }
             },
             onTextLayout = { textLayoutResult ->
@@ -330,11 +336,13 @@ fun CustomTextInput(
                             this.text = TdApi.FormattedText(text, null)
                         }
                     }
-                    TgClient.send(TdApi.SetChatDraftMessage(chatId, null, draftMessage)) { result ->
-                        if (result.constructor == TdApi.Ok.CONSTRUCTOR) {
-                            println("Setting draft message successfully, ChatId is $chatId")
-                        } else {
-                            println("Failed to set draft message is $result")
+                    if (chatId != -1L) {
+                        TgClient.send(TdApi.SetChatDraftMessage(chatId, null, draftMessage)) { result ->
+                            if (result.constructor == TdApi.Ok.CONSTRUCTOR) {
+                                println("Setting draft message successfully, ChatId is $chatId")
+                            } else {
+                                println("Failed to set draft message is $result")
+                            }
                         }
                     }
                 }

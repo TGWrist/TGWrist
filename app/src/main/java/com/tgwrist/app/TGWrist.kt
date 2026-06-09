@@ -10,6 +10,9 @@ import com.tgwrist.app.runtime.ChatsRepository
 import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.runtime.TgCallManager
 import com.tgwrist.app.runtime.UserManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.thunderdog.challegram.voip.VoIP
 import java.io.File
 
@@ -23,6 +26,11 @@ class TGWrist : Application(), LifecycleObserver {
         @SuppressLint("StaticFieldLeak")
         lateinit var context: Context
             private set // 外部只读，内部可改
+
+        // 应用级协程作用域：用于跨页面/脱离 Composable 生命周期仍需继续执行的任务
+        // （例如媒体选择器回调，回调触发时调用方的 Composable 可能已离开组合，
+        //  其 rememberCoroutineScope() 已取消，故此处需要独立于组合的作用域）
+        val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     }
     override fun onCreate() {
         super.onCreate()

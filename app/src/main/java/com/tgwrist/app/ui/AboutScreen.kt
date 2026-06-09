@@ -37,9 +37,9 @@ import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.TitleCard
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 import com.tgwrist.app.R
-import com.tgwrist.app.ui.message.info.handleUrlNavigation
 import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.getAppVersion
+import com.tgwrist.app.utils.handleUrlNavigation
 import com.tgwrist.app.utils.openInBrowser
 
 @Composable

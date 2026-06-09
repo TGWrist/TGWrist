@@ -393,4 +393,13 @@
     <string name="Forward_remove_caption">移除媒体说明文字</string>
     <string name="Add_forward">添加转发邮件列表</string>
     <string name="Cancel">取消</string>
+    <string name="Cancel_selection">取消选择</string>
+    <string name="Edit_text">编辑文本</string>
+    <string name="Replace_media">替换媒体</string>
+    <string name="Join">加入</string>
+    <string name="Join_channel_prompt">你还没有加入该频道</string>
+    <string name="Join_group_prompt">你还没有加入该群组</string>
+    <string name="Join_request_sent">已尝试加入，等待审核</string>
+    <string name="Join_channel_question">确认加入这个频道？</string>
+    <string name="Join_group_question">确认加入这个群组吗？</string>
 </resources>

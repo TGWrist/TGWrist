@@ -56,8 +56,10 @@ import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.EditMessageTextButton
 import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
+import com.tgwrist.app.ui.message.info.message.EditTextModelView
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -143,6 +145,9 @@ fun AnimatedEmojiMessageRenderer(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
+
+    val isEditing = remember { mutableStateOf(false) }
+    val editText = remember { mutableStateOf("") }
 
     val animatedEmoji = remember(content.animatedEmoji) { content.animatedEmoji }
     val sticker = remember(animatedEmoji) { animatedEmoji?.sticker }
@@ -295,99 +300,121 @@ fun AnimatedEmojiMessageRenderer(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                when {
-                    sticker == null -> {
-                        SelectionContainer {
-                            Text(
-                                text = fallbackEmoji.ifBlank { "❌" },
-                                style = MaterialTheme.typography.displayLarge,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-
-                    isTgs -> {
-                        val json = tgsJson
-                        if (json != null) {
-                            val composition by rememberLottieComposition(
-                                LottieCompositionSpec.JsonString(json)
-                            )
-                            val progress by animateLottieCompositionAsState(
-                                composition = composition,
-                                iterations = LottieConstants.IterateForever,
-                                isPlaying = true,
-                                restartOnPlay = false
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(stickerSize)
-                                    .clickable { playSound() },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                LottieAnimation(
-                                    composition = composition,
-                                    progress = { progress },
-                                    modifier = Modifier.fillMaxSize()
+            if (isEditing.value) {
+                EditTextModelView(editText, isEditing, messageRenderContext)
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        sticker == null -> {
+                            SelectionContainer {
+                                Text(
+                                    text = fallbackEmoji.ifBlank { "❌" },
+                                    style = MaterialTheme.typography.displayLarge,
+                                    textAlign = TextAlign.Center
                                 )
                             }
-                        } else {
-                            AnimatedEmojiPlaceholder(
-                                thumbnailFileUrl = thumbnailFileUrl,
-                                progress = if (stickerFileUrl.isBlank()) stickerDownloadProgress else thumbnailDownloadProgress
-                            )
                         }
-                    }
 
-                    isWebm -> {
-                        if (stickerFileUrl.isNotBlank()) {
-                            WebmStickerPlayer(
-                                filePath = stickerFileUrl,
-                                modifier = Modifier
-                                    .size(stickerSize)
-                                    .clickable { playSound() }
-                            )
-                        } else {
-                            AnimatedEmojiPlaceholder(
-                                thumbnailFileUrl = thumbnailFileUrl,
-                                progress = stickerDownloadProgress
-                            )
+                        isTgs -> {
+                            val json = tgsJson
+                            if (json != null) {
+                                val composition by rememberLottieComposition(
+                                    LottieCompositionSpec.JsonString(json)
+                                )
+                                val progress by animateLottieCompositionAsState(
+                                    composition = composition,
+                                    iterations = LottieConstants.IterateForever,
+                                    isPlaying = true,
+                                    restartOnPlay = false
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(stickerSize)
+                                        .clickable { playSound() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LottieAnimation(
+                                        composition = composition,
+                                        progress = { progress },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            } else {
+                                AnimatedEmojiPlaceholder(
+                                    thumbnailFileUrl = thumbnailFileUrl,
+                                    progress = if (stickerFileUrl.isBlank()) stickerDownloadProgress else thumbnailDownloadProgress
+                                )
+                            }
                         }
-                    }
 
-                    else -> {
-                        if (stickerFileUrl.isNotBlank()) {
-                            Image(
-                                painter = rememberAsyncImagePainter(
-                                    model = ImageRequest.Builder(context)
-                                        .data(stickerFileUrl)
-                                        .size(Size.ORIGINAL)
-                                        .build()
-                                ),
-                                contentDescription = "AnimatedEmoji",
-                                modifier = Modifier
-                                    .size(stickerSize)
-                                    .clickable { playSound() }
-                            )
-                        } else {
-                            AnimatedEmojiPlaceholder(
-                                thumbnailFileUrl = thumbnailFileUrl,
-                                progress = stickerDownloadProgress
-                            )
+                        isWebm -> {
+                            if (stickerFileUrl.isNotBlank()) {
+                                WebmStickerPlayer(
+                                    filePath = stickerFileUrl,
+                                    modifier = Modifier
+                                        .size(stickerSize)
+                                        .clickable { playSound() }
+                                )
+                            } else {
+                                AnimatedEmojiPlaceholder(
+                                    thumbnailFileUrl = thumbnailFileUrl,
+                                    progress = stickerDownloadProgress
+                                )
+                            }
+                        }
+
+                        else -> {
+                            if (stickerFileUrl.isNotBlank()) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(
+                                        model = ImageRequest.Builder(context)
+                                            .data(stickerFileUrl)
+                                            .size(Size.ORIGINAL)
+                                            .build()
+                                    ),
+                                    contentDescription = "AnimatedEmoji",
+                                    modifier = Modifier
+                                        .size(stickerSize)
+                                        .clickable { playSound() }
+                                )
+                            } else {
+                                AnimatedEmojiPlaceholder(
+                                    thumbnailFileUrl = thumbnailFileUrl,
+                                    progress = stickerDownloadProgress
+                                )
+                            }
                         }
                     }
                 }
             }
 
+            // 编辑按钮
+            if (messageRenderContext.properties?.canBeEdited == true) {
+                EditMessageTextButton(
+                    Modifier.padding(top = 4.dp),
+                    properties = messageRenderContext.properties,
+                    isEditing = isEditing,
+                    onClick = {
+                        if (isEditing.value) {
+                            isEditing.value = false
+                            editText.value = ""
+                        } else {
+                            editText.value = content.emoji
+                            isEditing.value = true
+                        }
+                    }
+                )
+            }
+
             // 回复按钮
             ReplyMessageButton(
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 8.dp),
                 properties = messageRenderContext.properties,
                 message = messageRenderContext.message
             )

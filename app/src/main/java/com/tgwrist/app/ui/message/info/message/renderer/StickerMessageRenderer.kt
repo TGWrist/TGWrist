@@ -369,8 +369,6 @@ fun StickerMessageRenderer(
                 )
             }
 
-            //Spacer(modifier = Modifier.height(12.dp))
-
             // 回复按钮
             ReplyMessageButton(
                 modifier = Modifier.padding(top = 4.dp),

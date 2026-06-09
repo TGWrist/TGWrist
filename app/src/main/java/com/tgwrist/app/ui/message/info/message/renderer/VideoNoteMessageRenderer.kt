@@ -64,6 +64,7 @@ import com.tgwrist.app.R
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import kotlinx.coroutines.Dispatchers
@@ -663,9 +664,9 @@ fun VideoNoteMessageRenderer(
                 )
             }
 
-            // 回复按钮
+            // 转发按钮
             item {
-                ReplyMessageButton(
+                ForwardMessageButton(
                     modifier = Modifier.transformedHeight(this, transformationSpec),
                     surfaceTransformation = SurfaceTransformation(transformationSpec),
                     properties = messageRenderContext.properties,

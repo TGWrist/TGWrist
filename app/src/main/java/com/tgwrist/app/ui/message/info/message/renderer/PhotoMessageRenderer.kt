@@ -50,14 +50,24 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import coil.size.Size
 import com.tgwrist.app.R
+import com.tgwrist.app.TGWrist
+import com.tgwrist.app.data.MediaPickerRequest
+import com.tgwrist.app.data.MediaPickerType
+import com.tgwrist.app.runtime.ChatMessagesRepository
 import com.tgwrist.app.ui.Destinations
+import com.tgwrist.app.ui.chat.buildMediaInputMessage
+import com.tgwrist.app.ui.chat.resolveContentUriToFile
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
 import com.tgwrist.app.ui.message.info.TranslationButton
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.ui.message.info.EditMessageMediaButton
+import com.tgwrist.app.ui.message.info.EditMessageTextButton
 import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
+import com.tgwrist.app.ui.message.info.message.EditTextModelView
+import com.tgwrist.app.utils.LocalGlobalAppState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,6 +83,10 @@ fun PhotoMessageRenderer(
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = messageRenderContext.navController
     val coroutineScope = rememberCoroutineScope()
+    val appState = LocalGlobalAppState.current
+
+    val isEditing = remember { mutableStateOf(false) }
+    val editText = remember { mutableStateOf("") }
 
     val showText = remember(content.caption) { content.caption }
     var translatedText by remember { mutableStateOf<TdApi.FormattedText?>(null) }
@@ -307,46 +321,114 @@ fun PhotoMessageRenderer(
             }
 
             // 显示文字
-            if (!showText?.text.isNullOrBlank()) {
-                MessageTextView(
-                    text = showText.text,
-                    entities = showText.entities,
-                    modifier = Modifier,
-                    navController = navController,
-                )
-
-                translatedText?.let {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        style = MaterialTheme.typography.titleLarge,
-                        textAlign = TextAlign.Center,
-                        text = stringResource(R.string.Translation_results),
-                        color = Color.White,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
+            if (isEditing.value) {
+                EditTextModelView(editText, isEditing, messageRenderContext)
+            } else {
+                if (!showText?.text.isNullOrBlank()) {
                     MessageTextView(
-                        text = it.text,
-                        entities = it.entities,
+                        text = showText.text,
+                        entities = showText.entities,
                         modifier = Modifier,
                         navController = navController,
                     )
+
+                    translatedText?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            style = MaterialTheme.typography.titleLarge,
+                            textAlign = TextAlign.Center,
+                            text = stringResource(R.string.Translation_results),
+                            color = Color.White,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        MessageTextView(
+                            text = it.text,
+                            entities = it.entities,
+                            modifier = Modifier,
+                            navController = navController,
+                        )
+                    }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                TranslationButton(
-                    text = showText,
-                    onDone = {
-                        translatedText = it
+            // 编辑文本按钮
+            if (messageRenderContext.properties?.canBeEdited == true) {
+                EditMessageTextButton(
+                    modifier = Modifier.padding(top = 8.dp),
+                    properties = messageRenderContext.properties,
+                    isEditing = isEditing,
+                    onClick = {
+                        if (isEditing.value) {
+                            isEditing.value = false
+                            editText.value = ""
+                        } else {
+                            editText.value = content.caption?.text ?: ""
+                            isEditing.value = true
+                        }
                     }
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            // 替换消息资源
+            if (messageRenderContext.properties?.canEditMedia == true) {
+                EditMessageMediaButton(
+                    modifier = Modifier.padding(top = 8.dp),
+                    properties = messageRenderContext.properties,
+                    onClick = {
+                        appState.mediaPickerRequest = MediaPickerRequest(
+                            type = MediaPickerType.IMAGE_AND_VIDEO,
+                            multiSelect = false,
+                        ) { result ->
+                            val item = result.firstOrNull() ?: return@MediaPickerRequest
+                            // 使用应用级作用域：回调触发时本 Composable 可能已离开组合，
+                            // coroutineScope（rememberCoroutineScope）已取消，launch 内代码不会执行
+                            TGWrist.applicationScope.launch {
+                                val path = withContext(Dispatchers.IO) {
+                                    resolveContentUriToFile(context, item.uri)
+                                }
+                                if (path == null) {
+                                    Toast.makeText(context, strFileSaveFailed, Toast.LENGTH_SHORT).show()
+                                    return@launch
+                                }
+                                // 保留原有图片说明文字
+                                val caption = content.caption.takeIf { !it.text.isNullOrBlank() }
+                                val newContent = buildMediaInputMessage(
+                                    type = if (item.isVideo) "Video" else "Image",
+                                    path = path,
+                                    caption = caption,
+                                )
+                                TgClient.send(
+                                    TdApi.EditMessageMedia(
+                                        messageRenderContext.chatId,
+                                        messageRenderContext.messageId,
+                                        null,
+                                        newContent
+                                    )
+                                ) { editResult ->
+                                    if (editResult is TdApi.Message) {
+                                        ChatMessagesRepository.publicAddOrReplaceMessage(editResult)
+                                    } else {
+                                        println("Failed to edit message media: $editResult")
+                                    }
+                                }
+                            }
+                        }
+                        navController.navigate(Destinations.MEDIA_PICKER)
+                    }
+                )
+            }
+
+            TranslationButton(
+                modifier = Modifier.padding(top = 8.dp),
+                text = showText,
+                onDone = {
+                    translatedText = it
+                }
+            )
 
             // 保存到媒体库按钮
             FilledTonalButton(
@@ -365,7 +447,7 @@ fun PhotoMessageRenderer(
                         contentDescription = "Save"
                     )
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             )
 
             // 回复按钮

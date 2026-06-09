@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -715,13 +716,15 @@ fun Page2(chatObject: TdApi.Chat?) {
                                     .wrapContentSize(align = Alignment.Center)
                         )
 
-                        Text(
-                            style = MaterialTheme.typography.titleLarge,
-                            textAlign = TextAlign.Center,
-                            text = chatObject?.title ?: "",
-                            color = Color.White,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        SelectionContainer {
+                            Text(
+                                style = MaterialTheme.typography.titleLarge,
+                                textAlign = TextAlign.Center,
+                                text = chatObject?.title ?: "",
+                                color = Color.White,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
                         Text(
                             text = subtitle,

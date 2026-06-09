@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.runtime.Composable
@@ -17,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,13 +44,18 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
 import com.tgwrist.app.data.ForwardMessages
+import com.tgwrist.app.data.ReplyMessage
 import com.tgwrist.app.runtime.Config.forwardMessages
 import com.tgwrist.app.runtime.Config.forwardMessagesFlow
+import com.tgwrist.app.runtime.Config.replyMessage
+import com.tgwrist.app.runtime.Config.replyMessageFlow
 import com.tgwrist.app.runtime.TgClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.drinkless.tdlib.TdApi
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun MoreActionDialog(
@@ -63,13 +70,17 @@ fun MoreActionDialog(
     val listState = rememberTransformingLazyColumnState()
     val overscroll = rememberOverscrollEffect()
     val transformationSpec = rememberTransformationSpec()
+    val scope = rememberCoroutineScope()
 
     val selectedMessageIds = remember(selectedMessages) {
         selectedMessages.map { it.id }.toSet()
     }
 
+    val replyMsg = replyMessageFlow.collectAsState()
+    val isReplySelected = replyMsg.value?.chatId == chat.id && selectedMessages.size == 1 && replyMsg.value?.messageId == selectedMessages.first().id
+
     val forwardMsgs by forwardMessagesFlow.collectAsState()
-    val isSelected = forwardMsgs?.chatId == chat.id &&
+    val isForwardSelected = forwardMsgs?.chatId == chat.id &&
             (forwardMsgs?.messageIds?.containsAll(selectedMessageIds) == true)
 
     // 删除确认 Dialog 的显示状态（内聚在本组件内部，不再上抛到 ChatScreen）
@@ -165,12 +176,63 @@ fun MoreActionDialog(
                     )
                 }
 
+                // 回复信息（只限一条）
+                if (selectedMessages.size == 1) {
+                    item {
+                        FilledTonalButton(
+                            onClick = {
+                                replyMessage = if (isReplySelected) {
+                                    null
+                                } else {
+                                    ReplyMessage(
+                                        chatId = chat.id,
+                                        messageId = selectedMessages.first().id,
+                                        canBeReplied = messageProperties[selectedMessages.first().id]?.canBeReplied ?: true,
+                                        canBeRepliedInAnotherChat = messageProperties[selectedMessages.first().id]?.canBeRepliedInAnotherChat ?: false
+                                    )
+                                }
+
+                                scope.launch {
+                                    delay(300.milliseconds)
+                                    onCancelRequest.invoke()
+                                }
+                            },
+                            label = {
+                                Text(
+                                    text = if (isReplySelected) stringResource(R.string.Reply_selected) else stringResource(R.string.Reply),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.Reply,
+                                    contentDescription = "Reply"
+                                )
+                            },
+                            colors = if (isReplySelected) {
+                                MaterialTheme.colorScheme.primaryContainer.let { selectedColor ->
+                                    androidx.wear.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = selectedColor,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            } else {
+                                androidx.wear.compose.material3.ButtonDefaults.filledTonalButtonColors()
+                            },
+                            transformation = SurfaceTransformation(transformationSpec),
+                            modifier = Modifier
+                                .transformedHeight(this, transformationSpec)
+                                .fillMaxWidth()
+                        )
+                    }
+                }
+
                 // 消息转发选项
                 item {
                     FilledTonalButton(
                         onClick = {
-                            forwardMessages = if (isSelected) {
-                                // 【反选逻辑】：从当前转发任务中移除这些 messageId
+                            forwardMessages = if (isForwardSelected) {
+                                // 反选逻辑 从当前转发任务中移除这些 messageId
                                 if (forwardMsgs != null && forwardMsgs!!.chatId == chat.id) {
                                     // 使用 "-" 运算符减去要取消的 IDs (转换为 Set 可以确保正确移除集合)
                                     val remainingIds = forwardMsgs!!.messageIds - selectedMessageIds.toSet()
@@ -201,10 +263,15 @@ fun MoreActionDialog(
                                     )
                                 }
                             }
+
+                            scope.launch {
+                                delay(300.milliseconds)
+                                onCancelRequest.invoke()
+                            }
                         },
                         label = {
                             Text(
-                                text = if (isSelected) stringResource(R.string.Forward_selected) else
+                                text = if (isForwardSelected) stringResource(R.string.Forward_selected) else
                                     if (forwardMsgs == null || forwardMsgs!!.chatId != chat.id) stringResource(R.string.Forward) else stringResource(R.string.Add_forward),
                                 style = MaterialTheme.typography.labelSmall
                             )
@@ -215,7 +282,7 @@ fun MoreActionDialog(
                                 contentDescription = null
                             )
                         },
-                        colors = if (isSelected) {
+                        colors = if (isForwardSelected) {
                             MaterialTheme.colorScheme.primaryContainer.let { selectedColor ->
                                 androidx.wear.compose.material3.ButtonDefaults.filledTonalButtonColors(
                                     containerColor = selectedColor,
@@ -263,7 +330,7 @@ fun MoreActionDialog(
                         onClick = { onCancelRequest.invoke() },
                         label = {
                             Text(
-                                text = stringResource(R.string.Cancel),
+                                text = stringResource(R.string.Cancel_selection),
                                 style = MaterialTheme.typography.labelSmall
                             )
                         },

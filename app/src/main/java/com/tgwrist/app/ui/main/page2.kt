@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.runtime.Composable
@@ -136,14 +137,16 @@ internal fun Page2() {
                                         .wrapContentSize(align = Alignment.Center)
                             )
 
-                            Text(
-                                style = MaterialTheme.typography.titleLarge,
-                                textAlign = TextAlign.Center,
-                                text = currentUser?.firstName + if (currentUser?.lastName.isNullOrBlank()) "" else " ${currentUser?.lastName}",
-                                color = Color.White,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                            )
+                            SelectionContainer {
+                                Text(
+                                    style = MaterialTheme.typography.titleLarge,
+                                    textAlign = TextAlign.Center,
+                                    text = currentUser?.firstName + if (currentUser?.lastName.isNullOrBlank()) "" else " ${currentUser?.lastName}",
+                                    color = Color.White,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                )
+                            }
 
                             Text(
                                 text = connectState,

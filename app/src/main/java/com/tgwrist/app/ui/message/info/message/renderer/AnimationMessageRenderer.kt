@@ -67,10 +67,12 @@ import coil.size.Size
 import com.tgwrist.app.R
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.EditMessageTextButton
 import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.TranslationButton
+import com.tgwrist.app.ui.message.info.message.EditTextModelView
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -141,6 +143,9 @@ fun AnimationMessageRenderer(
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = messageRenderContext.navController
     val coroutineScope = rememberCoroutineScope()
+
+    val isEditing = remember { mutableStateOf(false) }
+    val editText = remember { mutableStateOf("") }
 
     val animation = remember(content.animation) { content.animation }
     val caption = remember(content.caption) { content.caption }
@@ -532,38 +537,44 @@ fun AnimationMessageRenderer(
             }
 
             // ========== 说明文字 ==========
-            if (caption != null && !caption.text.isNullOrBlank()) {
-                item(key = "caption") {
-                    MessageTextView(
-                        text = caption.text,
-                        entities = caption.entities,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                            .padding(horizontal = 10.dp),
-                        navController = navController,
-                    )
+            if (isEditing.value) {
+                item(key = "edit_text") {
+                    EditTextModelView(editText, isEditing, messageRenderContext)
                 }
-                translateCaption?.let {
-                    item(key = "Translation_results") {
-                        Text(
-                            style = MaterialTheme.typography.titleLarge,
-                            textAlign = TextAlign.Center,
-                            text = stringResource(R.string.Translation_results),
-                            color = Color.White,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    item(key = "translated_caption") {
+            } else {
+                if (caption != null && !caption.text.isNullOrBlank()) {
+                    item(key = "caption") {
                         MessageTextView(
-                            text = it.text,
-                            entities = it.entities,
+                            text = caption.text,
+                            entities = caption.entities,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .transformedHeight(this, transformationSpec)
                                 .padding(horizontal = 10.dp),
                             navController = navController,
                         )
+                    }
+                    translateCaption?.let {
+                        item(key = "Translation_results") {
+                            Text(
+                                style = MaterialTheme.typography.titleLarge,
+                                textAlign = TextAlign.Center,
+                                text = stringResource(R.string.Translation_results),
+                                color = Color.White,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        item(key = "translated_caption") {
+                            MessageTextView(
+                                text = it.text,
+                                entities = it.entities,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .transformedHeight(this, transformationSpec)
+                                    .padding(horizontal = 10.dp),
+                                navController = navController,
+                            )
+                        }
                     }
                 }
             }
@@ -614,6 +625,27 @@ fun AnimationMessageRenderer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .transformedHeight(this, transformationSpec)
+                    )
+                }
+            }
+
+            // ========== 编辑按钮 ==========
+            if (messageRenderContext.properties?.canBeEdited == true) {
+                item(key = "edit_text_button") {
+                    EditMessageTextButton(
+                        modifier = Modifier.transformedHeight(this, transformationSpec),
+                        surfaceTransformation = SurfaceTransformation(transformationSpec),
+                        properties = messageRenderContext.properties,
+                        isEditing = isEditing,
+                        onClick = {
+                            if (isEditing.value) {
+                                isEditing.value = false
+                                editText.value = ""
+                            } else {
+                                editText.value = caption?.text ?: ""
+                                isEditing.value = true
+                            }
+                        }
                     )
                 }
             }

@@ -1404,6 +1404,14 @@ object ChatMessagesRepository {
     }
 
     /**
+     * 公开函数 经过校验的新增或覆盖单条消息
+     */
+    fun publicAddOrReplaceMessage(message: TdApi.Message) {
+        if (!isChatActive(message.chatId)) return
+        scope.launch { addOrReplaceMessage(message) }
+    }
+
+    /**
      * 把 ChatsRepository 里记录的最后一条消息塞进消息缓存。
      *
      * 当前文件暂未调用，保留这个工具方法可以在以后需要“先展示最后一条消息占位”时复用。

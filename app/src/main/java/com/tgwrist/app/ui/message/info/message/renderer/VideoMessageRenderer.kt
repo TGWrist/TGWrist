@@ -55,13 +55,24 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import coil.size.Size
 import com.tgwrist.app.R
+import com.tgwrist.app.TGWrist
+import com.tgwrist.app.data.MediaPickerRequest
+import com.tgwrist.app.data.MediaPickerType
+import com.tgwrist.app.runtime.ChatMessagesRepository
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.ui.Destinations
+import com.tgwrist.app.ui.chat.buildMediaInputMessage
+import com.tgwrist.app.ui.chat.resolveContentUriToFile
 import com.tgwrist.app.ui.message.info.DeleteMessageButton
+import com.tgwrist.app.ui.message.info.EditMessageMediaButton
+import com.tgwrist.app.ui.message.info.EditMessageTextButton
+import com.tgwrist.app.ui.message.info.ForwardMessageButton
 import com.tgwrist.app.ui.message.info.MessageTextView
 import com.tgwrist.app.ui.message.info.ReplyMessageButton
 import com.tgwrist.app.ui.message.info.TranslationButton
+import com.tgwrist.app.ui.message.info.message.EditTextModelView
 import com.tgwrist.app.ui.message.info.message.factory.MessageRenderContext
+import com.tgwrist.app.utils.LocalGlobalAppState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -98,6 +109,10 @@ fun VideoMessageRenderer(
     val lifecycleOwner = LocalLifecycleOwner.current
     val navController = messageRenderContext.navController
     val coroutineScope = rememberCoroutineScope()
+    val appState = LocalGlobalAppState.current
+
+    val isEditing = remember { mutableStateOf(false) }
+    val editText = remember { mutableStateOf("") }
 
     val caption = remember(content.caption) { content.caption }
     var translateCaption by remember { mutableStateOf<TdApi.FormattedText?>(null) }
@@ -403,40 +418,46 @@ fun VideoMessageRenderer(
             }
 
             // ========== 说明文字 ==========
-            if (caption != null && !caption.text.isNullOrBlank()) {
-                item(key = "caption") {
-                    MessageTextView(
-                        text = caption.text,
-                        entities = caption.entities,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .transformedHeight(this, transformationSpec)
-                            .padding(horizontal = 10.dp),
-                        navController = navController,
-                    )
+            if (isEditing.value) {
+                item(key = "edit_text") {
+                    EditTextModelView(editText, isEditing, messageRenderContext)
                 }
-                translateCaption?.let {
-                    item(key = "Translation_results") {
-                        Text(
-                            style = MaterialTheme.typography.titleLarge,
-                            textAlign = TextAlign.Center,
-                            text = stringResource(R.string.Translation_results),
-                            color = Color.White,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                        )
-                    }
-
-                    item(key = "translated_caption") {
+            } else {
+                if (caption != null && !caption.text.isNullOrBlank()) {
+                    item(key = "caption") {
                         MessageTextView(
-                            text = it.text,
-                            entities = it.entities,
+                            text = caption.text,
+                            entities = caption.entities,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .transformedHeight(this, transformationSpec)
                                 .padding(horizontal = 10.dp),
                             navController = navController,
                         )
+                    }
+                    translateCaption?.let {
+                        item(key = "Translation_results") {
+                            Text(
+                                style = MaterialTheme.typography.titleLarge,
+                                textAlign = TextAlign.Center,
+                                text = stringResource(R.string.Translation_results),
+                                color = Color.White,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            )
+                        }
+
+                        item(key = "translated_caption") {
+                            MessageTextView(
+                                text = it.text,
+                                entities = it.entities,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .transformedHeight(this, transformationSpec)
+                                    .padding(horizontal = 10.dp),
+                                navController = navController,
+                            )
+                        }
                     }
                 }
             }
@@ -503,6 +524,79 @@ fun VideoMessageRenderer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .transformedHeight(this, transformationSpec)
+                    )
+                }
+            }
+
+            // ========== 编辑按钮 ==========
+            if (messageRenderContext.properties?.canBeEdited == true) {
+                item(key = "edit_text_button") {
+                    EditMessageTextButton(
+                        modifier = Modifier.transformedHeight(this, transformationSpec),
+                        surfaceTransformation = SurfaceTransformation(transformationSpec),
+                        properties = messageRenderContext.properties,
+                        isEditing = isEditing,
+                        onClick = {
+                            if (isEditing.value) {
+                                isEditing.value = false
+                                editText.value = ""
+                            } else {
+                                editText.value = caption?.text ?: ""
+                                isEditing.value = true
+                            }
+                        }
+                    )
+                }
+            }
+
+            // ========== 替换消息资源 ==========
+            if (messageRenderContext.properties?.canEditMedia == true) {
+                item(key = "edit_media_button") {
+                    EditMessageMediaButton(
+                        modifier = Modifier.transformedHeight(this, transformationSpec),
+                        surfaceTransformation = SurfaceTransformation(transformationSpec),
+                        properties = messageRenderContext.properties,
+                        onClick = {
+                            appState.mediaPickerRequest = MediaPickerRequest(
+                                type = MediaPickerType.IMAGE_AND_VIDEO,
+                                multiSelect = false,
+                            ) { result ->
+                                val item = result.firstOrNull() ?: return@MediaPickerRequest
+                                // 使用应用级作用域：回调触发时本 Composable 可能已离开组合，
+                                // coroutineScope（rememberCoroutineScope）已取消，launch 内代码不会执行
+                                TGWrist.applicationScope.launch {
+                                    val path = withContext(Dispatchers.IO) {
+                                        resolveContentUriToFile(context, item.uri)
+                                    }
+                                    if (path == null) {
+                                        Toast.makeText(context, strFileSaveFailed, Toast.LENGTH_SHORT).show()
+                                        return@launch
+                                    }
+                                    // 保留原有图片说明文字
+                                    val caption = content.caption.takeIf { !it.text.isNullOrBlank() }
+                                    val newContent = buildMediaInputMessage(
+                                        type = if (item.isVideo) "Video" else "Image",
+                                        path = path,
+                                        caption = caption,
+                                    )
+                                    TgClient.send(
+                                        TdApi.EditMessageMedia(
+                                            messageRenderContext.chatId,
+                                            messageRenderContext.messageId,
+                                            null,
+                                            newContent
+                                        )
+                                    ) { editResult ->
+                                        if (editResult is TdApi.Message) {
+                                            ChatMessagesRepository.publicAddOrReplaceMessage(editResult)
+                                        } else {
+                                            println("Failed to edit message media: $editResult")
+                                        }
+                                    }
+                                }
+                            }
+                            navController.navigate(Destinations.MEDIA_PICKER)
+                        }
                     )
                 }
             }
@@ -606,9 +700,9 @@ fun VideoMessageRenderer(
                 )
             }
 
-            // 回复按钮
+            // 转发按钮
             item {
-                ReplyMessageButton(
+                ForwardMessageButton(
                     modifier = Modifier.transformedHeight(this, transformationSpec),
                     surfaceTransformation = SurfaceTransformation(transformationSpec),
                     properties = messageRenderContext.properties,

@@ -21,8 +21,8 @@ android {
         applicationId = "com.tgwrist.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 29
-        versionName = "3.9.1"
+        versionCode = 30
+        versionName = "3.9.2"
     }
 
     signingConfigs {

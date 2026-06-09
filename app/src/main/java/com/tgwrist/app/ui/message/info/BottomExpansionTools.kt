@@ -5,8 +5,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.MoveDown
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,36 +48,38 @@ fun TranslationButton(
 ) {
     var doTranslate by remember { mutableStateOf(false) }
 
-    FilledTonalButton(
-        enabled = !doTranslate,
-        onClick = {
-            doTranslate = true
-            TgClient.send(TdApi.TranslateText(text, toLanguageCode, tone)) { result ->
-                if (result is TdApi.FormattedText) {
-                    doTranslate = false
-                    onDone(result)
-                } else {
-                    // 翻译失败
-                    doTranslate = false
+    if (text.text?.isNotBlank() == true) {
+        FilledTonalButton(
+            enabled = !doTranslate,
+            onClick = {
+                doTranslate = true
+                TgClient.send(TdApi.TranslateText(text, toLanguageCode, tone)) { result ->
+                    if (result is TdApi.FormattedText) {
+                        doTranslate = false
+                        onDone(result)
+                    } else {
+                        // 翻译失败
+                        doTranslate = false
+                    }
                 }
-            }
-        },
-        label = {
-            Text(
-                text = stringResource(R.string.Translate),
-                style = MaterialTheme.typography.labelSmall
-            )
-        },
-        icon = {
-            Icon(
-                imageVector = Icons.Rounded.Translate,
-                contentDescription = "Translate"
-            )
-        },
-        transformation = surfaceTransformation,
-        modifier = modifier
-            .fillMaxWidth()
-    )
+            },
+            label = {
+                Text(
+                    text = stringResource(R.string.Translate),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            },
+            icon = {
+                Icon(
+                    imageVector = Icons.Rounded.Translate,
+                    contentDescription = "Translate"
+                )
+            },
+            transformation = surfaceTransformation,
+            modifier = modifier
+                .fillMaxWidth()
+        )
+    }
 }
 
 @Composable
@@ -143,13 +148,26 @@ fun ForwardMessageButton(
     FilledTonalButton(
         onClick = {
             forwardMessages = if (isSelected) {
-                null
+                // 反选逻辑 从当前转发任务中移除这些 messageId
+                if (forwardMsgs != null && forwardMsgs!!.chatId == message.chatId) {
+                    // 使用 "-" 运算符减去要取消的 ID
+                    val remainingIds = forwardMsgs!!.messageIds - message.id
+
+                    if (remainingIds.isEmpty()) {
+                        null // 减到没有了，清空整个转发任务
+                    } else {
+                        // 还有剩余的消息，仅更新 messageIds 列表
+                        forwardMsgs!!.copy(messageIds = remainingIds)
+                    }
+                } else {
+                    null
+                }
             } else {
                 // 如果当前已有转发任务，且 chatId 对应得上，就在原基础上叠加 messageId
                 if (forwardMsgs != null && forwardMsgs!!.chatId == message.chatId) {
                     forwardMsgs!!.copy(
                         // 使用 + 运算符，会创建一个包含新元素的新 List 对象，触发 UI 刷新
-                        messageIds = forwardMsgs!!.messageIds + message.id
+                        messageIds = (forwardMsgs!!.messageIds + message.id).distinct()
                     )
                 } else {
                     // 创建全新的转发任务
@@ -289,6 +307,83 @@ fun DeleteMessageButton(
             Icon(
                 imageVector = Icons.Rounded.Delete,
                 contentDescription = "Delete"
+            )
+        },
+        transformation = surfaceTransformation,
+        modifier = modifier
+            .fillMaxWidth()
+    )
+}
+
+@Composable
+fun EditMessageTextButton(
+    modifier: Modifier = Modifier,
+    surfaceTransformation: SurfaceTransformation? = null,
+    properties: TdApi.MessageProperties?,
+    isEditing: MutableState<Boolean>,
+    onClick: () -> Unit
+) {
+    if (properties?.canBeEdited != true) {
+        return
+    }
+
+    FilledTonalButton(
+        onClick = {
+            onClick.invoke()
+        },
+        label = {
+            Text(
+                text = stringResource(R.string.Edit_text),
+                style = MaterialTheme.typography.labelSmall
+            )
+        },
+        icon = {
+            Icon(
+                imageVector = Icons.Rounded.Edit,
+                contentDescription = "EditText"
+            )
+        },
+        colors = if (isEditing.value) {
+            MaterialTheme.colorScheme.primaryContainer.let { selectedColor ->
+                androidx.wear.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                    containerColor = selectedColor,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        } else {
+            androidx.wear.compose.material3.ButtonDefaults.filledTonalButtonColors()
+        },
+        transformation = surfaceTransformation,
+        modifier = modifier
+            .fillMaxWidth()
+    )
+}
+
+@Composable
+fun EditMessageMediaButton(
+    modifier: Modifier = Modifier,
+    surfaceTransformation: SurfaceTransformation? = null,
+    properties: TdApi.MessageProperties?,
+    onClick: () -> Unit
+) {
+    if (properties?.canEditMedia != true) {
+        return
+    }
+
+    FilledTonalButton(
+        onClick = {
+            onClick.invoke()
+        },
+        label = {
+            Text(
+                text = stringResource(R.string.Replace_media),
+                style = MaterialTheme.typography.labelSmall
+            )
+        },
+        icon = {
+            Icon(
+                imageVector = Icons.Rounded.MoveDown,
+                contentDescription = "EditMove Down"
             )
         },
         transformation = surfaceTransformation,

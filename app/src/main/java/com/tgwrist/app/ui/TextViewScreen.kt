@@ -17,6 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.foundation.rotary.rotaryScrollable
@@ -36,14 +39,27 @@ fun TextViewScreen(
     val appState = LocalGlobalAppState.current
     val navController = appState.navController ?: return
     val scrollState = rememberScrollState()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val focusRequester = remember { FocusRequester() }
     // 只有当最大滚动值 > 0 时，才认为需要显示滚动条
     val isScrollable = scrollState.maxValue > 0
     var tgText by remember { mutableStateOf<TdApi.FormattedText?>(null) }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            // 只有当页面真正被销毁（出栈）时，才执行清理
+            if (event == Lifecycle.Event.ON_DESTROY) {
+                appState.tgTextIdMap.remove(textId)
+            }
+        }
+
+        // 添加监听
+        lifecycleOwner.lifecycle.addObserver(observer)
+
         onDispose {
-            appState.tgTextIdMap.remove(textId)  // 移除记录
+            // 这里的 onDispose 只是为了在 Composable 重组或离开组合时移除监听器，防止内存泄漏
+            // 并不是在这里执行你的业务清理逻辑
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 

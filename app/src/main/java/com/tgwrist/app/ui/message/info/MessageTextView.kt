@@ -25,16 +25,14 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.core.net.toUri
-import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.tgwrist.app.R
-import com.tgwrist.app.TGWrist
-import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.runtime.TgClient
-import com.tgwrist.app.utils.openInBrowser
-import com.tgwrist.app.utils.setClipboardText
+import com.tgwrist.app.ui.Destinations
+import com.tgwrist.app.utils.copyToClipboard
+import com.tgwrist.app.utils.handleUrlNavigation
 import org.drinkless.tdlib.TdApi
 
 @Composable
@@ -362,149 +360,6 @@ fun onEntityClickLogic(
         // 兜底
         else -> {
             println("Unknown Entity Type clicked: ${entityType.javaClass.simpleName}")
-        }
-    }
-}
-
-// 定义一个本地函数来处理 URL 跳转逻辑 (复用你原来的代码)
-fun handleUrlNavigation(url: String, context: Context, navController: NavController) {
-    val linkNotSupported = context.getString(R.string.link_not_supported)
-    TgClient.send(TdApi.GetInternalLinkType(url)) { linkTypeResult ->
-        Handler(Looper.getMainLooper()).post {
-            if (linkTypeResult is TdApi.InternalLinkType) {
-                println(linkTypeResult)
-                when (linkTypeResult) {
-                    // ====================================================
-                    // 1. 聊天与消息跳转
-                    // ====================================================
-                    is TdApi.InternalLinkTypePublicChat -> {
-                        val username = linkTypeResult.chatUsername
-                        TgClient.send(TdApi.SearchPublicChat(username)) { chatResult ->
-                            if (chatResult is TdApi.Chat) {
-                                Handler(Looper.getMainLooper()).post {
-                                    navController.navigate(Destinations.chat(chatResult.id))
-                                }
-                            }
-                        }
-                    }
-                    is TdApi.InternalLinkTypeChatInvite -> showJoinChatDialog(linkTypeResult.inviteLink)
-                    is TdApi.InternalLinkTypeMessage -> handleMessageLink(linkTypeResult.url, context, navController)
-                    is TdApi.InternalLinkTypeBotStart -> handleBotStart(linkTypeResult.botUsername, linkTypeResult.startParameter, context, navController)
-                    is TdApi.InternalLinkTypeVideoChat -> {
-                        // TODO: 跳转到语音/视频聊天界面
-                        // navController.navigate(Destinations.videoChat(linkTypeResult.chatUsername))
-                    }
-
-                    // ====================================================
-                    // 2. 设置页面跳转
-                    // ====================================================
-                    // is TdApi.InternalLinkTypeSettings -> navController.navigate(Destinations.Settings)
-                    // ... 其他设置项保留你的注释 ...
-
-                    // ====================================================
-                    // 3. 内容与外观
-                    // ====================================================
-                    is TdApi.InternalLinkTypeStickerSet -> showStickerSetPreview(linkTypeResult.stickerSetName)
-                    is TdApi.InternalLinkTypeTheme -> showThemePreview(linkTypeResult.themeName)
-                    is TdApi.InternalLinkTypeBackground -> showBackgroundPreview(linkTypeResult.backgroundName)
-                    is TdApi.InternalLinkTypeStory -> {
-                        // TODO: 跳转 Story 查看器
-                        Toast.makeText(context, linkNotSupported, Toast.LENGTH_SHORT).show()
-                    }
-                    is TdApi.InternalLinkTypeWebApp,
-                    is TdApi.InternalLinkTypeMainWebApp -> showWebApp(linkTypeResult)
-
-                    // ====================================================
-                    // 4. 特殊功能与认证
-                    // ====================================================
-                    is TdApi.InternalLinkTypeAuthenticationCode -> {
-                        copyToClipboard(linkTypeResult.code)
-                        Toast.makeText(context, "Code copied: ${linkTypeResult.code}", Toast.LENGTH_SHORT).show()
-                    }
-                    is TdApi.InternalLinkTypeQrCodeAuthentication -> Toast.makeText(context, linkNotSupported, Toast.LENGTH_SHORT).show()
-                    is TdApi.InternalLinkTypePassportDataRequest -> Toast.makeText(context, linkNotSupported, Toast.LENGTH_SHORT).show()
-
-                    // ====================================================
-                    // 5. 兜底逻辑
-                    // ====================================================
-                    is TdApi.InternalLinkTypeUnknownDeepLink -> openInBrowser(context, url)
-                    else -> {
-                        println("Unhandled link type: ${linkTypeResult.javaClass.simpleName}")
-                        // 尝试作为普通网页打开
-                        openInBrowser(context, url)
-                    }
-                }
-            } else {
-                // 如果解析失败，直接尝试浏览器打开
-                openInBrowser(context, url)
-            }
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// 辅助函数 (放在你的 Activity 或 Utils 文件中)
-// -------------------------------------------------------------
-// 占位函数示例 - 需要你根据实际业务逻辑实现
-fun showJoinChatDialog(inviteLink: String) {
-    TgClient.send(TdApi.CheckChatInviteLink(inviteLink)) { result ->
-
-    }
-}
-fun showStickerSetPreview(name: String) { /* TODO: 弹窗显示贴纸包 */ }
-fun showThemePreview(name: String) { /* TODO */ }
-fun showBackgroundPreview(name: String) { /* TODO */ }
-fun showWebApp(linkInfo: TdApi.InternalLinkType) { /* TODO: 启动 WebViewFragment */ }
-fun handleBotStart(username: String, param: String, context: Context, navController: NavController) {
-    TgClient.send(TdApi.SearchPublicChat(username)) { chatResult ->
-        if (chatResult is TdApi.Chat) {
-            val chatType = chatResult.type
-            if (chatType is TdApi.ChatTypePrivate) {
-                val botUserId = chatType.userId
-                TgClient.send(TdApi.SendBotStartMessage(botUserId, chatResult.id, param)) { sendResult ->
-                    Handler(Looper.getMainLooper()).post {
-                        navController.navigate(Destinations.chat(chatResult.id))
-                    }
-                }
-            } else {
-                Handler(Looper.getMainLooper()).post {
-                    navController.navigate(Destinations.chat(chatResult.id))
-                }
-            }
-        } else {
-            Handler(Looper.getMainLooper()).post {
-                Toast.makeText(context, "Bot not found: @$username", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-}
-
-fun handleMessageLink(url: String, context: Context, navController: NavController) {
-    TgClient.send(TdApi.GetMessageLinkInfo(url)) { result ->
-        Handler(Looper.getMainLooper()).post {
-            if (result is TdApi.MessageLinkInfo && result.chatId != 0L) {
-                navController.navigate(Destinations.chat(result.chatId))
-            } else {
-                // 无法解析消息链接，尝试在浏览器中打开
-                openInBrowser(context, url)
-            }
-        }
-    }
-}
-
-fun copyToClipboard(text: String) {
-    // 1. 获取主线程 Handler
-    Handler(Looper.getMainLooper()).post {
-        try {
-            // 2. 【关键点】直接使用全局 Context
-            val context = TGWrist.context
-
-            context.setClipboardText(text)
-
-            // Toast 也可以正常使用了
-            Toast.makeText(context, context.getString(R.string.Copied_to_clipboard), Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 }

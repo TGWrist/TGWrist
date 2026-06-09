@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardReturn
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardVoice
@@ -66,6 +67,7 @@ import androidx.wear.compose.material3.AppCard
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.FilledIconButton
+import androidx.wear.compose.material3.FilledTonalButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.IconButtonDefaults
 import androidx.wear.compose.material3.ListHeader
@@ -134,6 +136,37 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
     }
 
     var text by remember { mutableStateOf("") }
+
+    // 是否显示加入按钮
+    var isShowJoinButton by remember { mutableStateOf(false) }
+    // 加入目标是否为频道（true=频道，false=群组），用于切换提示文案
+    var isJoinTargetChannel by remember { mutableStateOf(false) }
+
+    // 检测当前用户是否已加入该群组/频道：未加入则展示加入提示与按钮
+    LaunchedEffect(chatObject) {
+        when (val type = chatObject?.type) {
+            is TdApi.ChatTypeSupergroup -> {
+                isJoinTargetChannel = type.isChannel
+                TgClient.send(TdApi.GetSupergroup(type.supergroupId)) { result ->
+                    if (result is TdApi.Supergroup) {
+                        isShowJoinButton = isNotJoinedStatus(result.status)
+                    }
+                }
+            }
+            is TdApi.ChatTypeBasicGroup -> {
+                isJoinTargetChannel = false
+                TgClient.send(TdApi.GetBasicGroup(type.basicGroupId)) { result ->
+                    if (result is TdApi.BasicGroup) {
+                        isShowJoinButton = isNotJoinedStatus(result.status)
+                    }
+                }
+            }
+            else -> {
+                // 私聊 / 密聊等无需加入
+                isShowJoinButton = false
+            }
+        }
+    }
 
     // 语音录制状态订阅
     val isVoiceRecording by VoiceRecordingState.isRecording.collectAsState()
@@ -239,6 +272,16 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
         }
     }
 
+    // 录音中每 4 秒发送一次"正在录音"状态
+    LaunchedEffect(isVoiceRecording, isVoicePaused) {
+        if (isVoiceRecording && !isVoicePaused) {
+            while (true) {
+                TgClient.send(TdApi.SendChatAction(chatId, null, null, TdApi.ChatActionRecordingVoiceNote()))
+                kotlinx.coroutines.delay(4000L.milliseconds)
+            }
+        }
+    }
+
     // 录音/预览结束后清理本地播放状态
     LaunchedEffect(recordMode) {
         if (!recordMode) {
@@ -311,6 +354,48 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (isShowJoinButton) {
+                item {
+                    // 检测是否是聊群或频道，用于提示是否加入
+                    ListHeader {
+                        Text(
+                            style = MaterialTheme.typography.titleLarge,
+                            textAlign = TextAlign.Center,
+                            text = if (isJoinTargetChannel) {
+                                stringResource(R.string.Join_channel_prompt)
+                            } else {
+                                stringResource(R.string.Join_group_prompt)
+                            },
+                            color = Color.White,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                        )
+                    }
+                }
+
+                item {
+                    FilledTonalButton(
+                        onClick = {
+                            TgClient.send(TdApi.JoinChat(chatId)) { result ->
+                                if (result is TdApi.Ok) {
+                                    isShowJoinButton = false
+                                }
+                            }
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = null
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.Join))
+                    }
+                }
+            }
+
             item {
                 ListHeader {
                     Text(
@@ -352,7 +437,7 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                             val key = System.currentTimeMillis()
                             appState.sharedMessageInfo[SharedMessageInfoKey(chatId, key)] =
                                 SharedMessageInfoData(forwardMsgs?.messageIds?.sorted() ?: listOf())
-                            navController.navigate(Destinations.messageInfo(chatId, key))
+                            navController.navigate(Destinations.messageInfo(chatId, key, false))
                         },
                         appImage = {
                             Icon(
@@ -385,8 +470,6 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                             checked = sendCopy,
                             onCheckedChange = {
                                 sendCopy = it
-                                // sendCopy 关闭后 removeCaption 失去意义，重置
-                                if (!it) removeCaption = false
                             },
                             label = {
                                 Text(
@@ -964,12 +1047,26 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
 }
 
 /**
+ * 根据 [ChatMemberStatus] 判断当前用户是否「未加入」该群组/频道。
+ *
+ * 未加入：[TdApi.ChatMemberStatusLeft]、[TdApi.ChatMemberStatusBanned]，
+ * 以及被限制但实际已离开的 [TdApi.ChatMemberStatusRestricted]（isMember=false）。
+ * 其余（Creator / Administrator / Member / 仍在群里的 Restricted）均视为已加入。
+ */
+internal fun isNotJoinedStatus(status: TdApi.ChatMemberStatus?): Boolean = when (status) {
+    is TdApi.ChatMemberStatusLeft -> true
+    is TdApi.ChatMemberStatusBanned -> true
+    is TdApi.ChatMemberStatusRestricted -> !status.isMember
+    else -> false
+}
+
+/**
  * 用 [type] 与本地文件路径构造 Telegram 媒体消息。
  *
  * - "Video" → [TdApi.InputMessageVideo]，启用 streaming，宽高/时长交给 TDLib 自行检测；
  * - 其它（默认 "Image"）→ [TdApi.InputMessagePhoto]。
  */
-private fun buildMediaInputMessage(
+internal fun buildMediaInputMessage(
     type: String,
     path: String,
     caption: TdApi.FormattedText?,
@@ -997,7 +1094,7 @@ private fun buildMediaInputMessage(
  *
  * 必须在 IO 调度器中调用。返回 null 表示无法访问。
  */
-private fun resolveContentUriToFile(context: Context, uri: Uri): String? {
+internal fun resolveContentUriToFile(context: Context, uri: Uri): String? {
     if (uri.scheme == "file") return uri.path
 
     val resolver = context.contentResolver

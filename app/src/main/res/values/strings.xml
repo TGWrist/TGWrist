@@ -393,4 +393,13 @@
     <string name="Forward_remove_caption">Remove captions</string>
     <string name="Add_forward">Add forwarded messages list</string>
     <string name="Cancel">Cancel</string>
+    <string name="Cancel_selection">Cancel selection</string>
+    <string name="Edit_text">Edit text</string>
+    <string name="Replace_media">Replace media</string>
+    <string name="Join">Join</string>
+    <string name="Join_channel_prompt">You haven\'t joined this channel yet</string>
+    <string name="Join_group_prompt">You haven\'t joined this group yet</string>
+    <string name="Join_request_sent">Join request sent</string>
+    <string name="Join_channel_question">Join this channel?</string>
+    <string name="Join_group_question">Join this group?</string>
 </resources>
