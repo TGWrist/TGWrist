@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +28,7 @@ import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
+import androidx.wear.compose.material3.FilledTonalButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
@@ -36,10 +39,13 @@ import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.tgwrist.app.R
 import com.tgwrist.app.TGWrist
+import com.tgwrist.app.ui.Destinations
 import com.tgwrist.app.ui.TextInputChip
 import com.tgwrist.app.runtime.TgClient
+import com.tgwrist.app.utils.LocalGlobalAppState
 import com.tgwrist.app.utils.setTdlibParameters
 import org.drinkless.tdlib.TdApi
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 internal fun Page1(
@@ -50,12 +56,26 @@ internal fun Page1(
     val listState = rememberTransformingLazyColumnState()
     val overscroll = rememberOverscrollEffect()
     val transformationSpec = rememberTransformationSpec()
+    val navController = LocalGlobalAppState.current.navController
     var phoneNumber by remember { mutableStateOf("+") }
     var sendingRequest by remember { mutableStateOf(false) }
+    var showNetworkOption by remember { mutableStateOf(false) }
 
     // 字符串变量
     val errorRequestText = stringResource(R.string.Request_error)
     val invalidPhoneNumber = stringResource(R.string.Invalid_phone_number)
+
+    // 点击EdgeButton后计时5秒，如果仍停留在本页且请求未完成，则展开网络设置选项
+    LaunchedEffect(sendingRequest) {
+        if (sendingRequest) {
+            kotlinx.coroutines.delay(5000.milliseconds)
+            if (sendingRequest) {
+                showNetworkOption = true
+            }
+        } else {
+            showNetworkOption = false
+        }
+    }
 
     ScreenScaffold(
         scrollState = listState,
@@ -154,6 +174,36 @@ internal fun Page1(
                         modifier = Modifier
                             .fillMaxWidth()
                     )
+                }
+            }
+            if (showNetworkOption) {
+                // 网络可能有问题的提示
+                item {
+                    Text(
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        text = stringResource(R.string.Login_network_issue_tip),
+                        color = Color.White,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    )
+                }
+                // 网络设置
+                item {
+                    FilledTonalButton(
+                        onClick = {
+                            navController?.navigate(Destinations.NETWORK)
+                        },
+                        transformation = SurfaceTransformation(transformationSpec),
+                        icon = {
+                            Icon(Icons.Rounded.Wifi, contentDescription = null)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                    ) {
+                        Text(stringResource(R.string.Network_settings))
+                    }
                 }
             }
         }

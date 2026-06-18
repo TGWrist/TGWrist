@@ -1,0 +1,82 @@
+name: Android Build and Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          lfs: true
+
+      - name: Extract repository name
+        id: repo-name
+        run: echo "REPO_NAME=$(echo ${{ github.repository }} | cut -d'/' -f2)" >> $GITHUB_ENV
+
+      - name: Extract version name
+        id: version_name
+        run: |
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' ./app/build.gradle.kts)
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Build Tools and NDK
+        run: |
+          sdkmanager "build-tools;35.0.0"
+          sdkmanager "ndk;27.2.12479018"
+          sdkmanager "cmake;3.22.1"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: 9.3.1
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > keystore.jks
+
+      - name: Build Release APK
+        env:
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEYSTORE_PATH: ${{ github.workspace }}/keystore.jks
+        run: ./gradlew assembleFullRelease assembleArm32Release assembleArm64Release bundleFullRelease
+
+      - name: Rename APKs
+        run: |
+          mv app/build/outputs/apk/full/release/app-full-release.apk ${{ env.REPO_NAME }}-v${{ env.VERSION_NAME }}-full.apk
+          mv app/build/outputs/apk/arm32/release/app-arm32-release.apk ${{ env.REPO_NAME }}-v${{ env.VERSION_NAME }}-arm32.apk
+          mv app/build/outputs/apk/arm64/release/app-arm64-release.apk ${{ env.REPO_NAME }}-v${{ env.VERSION_NAME }}-arm64.apk
+
+      - name: Cleanup Keystore
+        if: always()
+        run: rm -f keystore.jks
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "*.apk"
+          token: ${{ github.token }}
+          generateReleaseNotes: true
+          tag: v${{ env.VERSION_NAME }}
+          name: "TG Wrist v${{ env.VERSION_NAME }}"
+          prerelease: false

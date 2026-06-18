@@ -121,7 +121,10 @@ fun MessageInfo(chatId: Long, msgIdList: List<Long>, showMsgsInfo: Boolean = tru
     }
     
     val chatMessagesById by remember(chatMessages) {
-        derivedStateOf { chatMessages.associateBy(TdApi.Message::id) }
+        derivedStateOf {
+            // 仅保留已加载内容的消息（跳过占位条目），按 id 建立索引
+            chatMessages.mapNotNull { it.message }.associateBy(TdApi.Message::id)
+        }
     }
 
     // 订阅消息删除事件

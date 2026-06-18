@@ -132,7 +132,10 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
         )
 
     val chatMessagesById by remember(chatMessages) {
-        derivedStateOf { chatMessages.associateBy(TdApi.Message::id) }
+        derivedStateOf {
+            // 仅保留已加载内容的消息（跳过占位条目），按 id 建立索引
+            chatMessages.mapNotNull { it.message }.associateBy(TdApi.Message::id)
+        }
     }
 
     var text by remember { mutableStateOf("") }
@@ -604,6 +607,13 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                                 try { player.start() } catch (_: Throwable) {}
                                 isPreviewPlaying = true
                             }
+                        },
+                        onSeek = { ratio ->
+                            val player = previewPlayer ?: return@VoiceRecordingDisplay
+                            val total = if (previewDurationMs > 0L) previewDurationMs else voiceDurationMs
+                            val target = (ratio * total).toLong().coerceIn(0L, total)
+                            try { player.seekTo(target.toInt()) } catch (_: Throwable) {}
+                            previewPositionMs = target
                         }
                     )
                 } else {
@@ -1047,7 +1057,7 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
 }
 
 /**
- * 根据 [ChatMemberStatus] 判断当前用户是否「未加入」该群组/频道。
+ * 根据 [TdApi.ChatMemberStatus] 判断当前用户是否「未加入」该群组/频道。
  *
  * 未加入：[TdApi.ChatMemberStatusLeft]、[TdApi.ChatMemberStatusBanned]，
  * 以及被限制但实际已离开的 [TdApi.ChatMemberStatusRestricted]（isMember=false）。

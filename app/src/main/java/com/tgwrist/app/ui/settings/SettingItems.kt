@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Theaters
 import androidx.compose.material.icons.rounded.VideoFile
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.wear.compose.material3.Icon
@@ -100,6 +101,12 @@ fun buildSettingItems(
             titleRes = R.string.Storage_management,
             pageRoute = Destinations.settings(2),
             icon = { Icon(Icons.Rounded.Storage, contentDescription = null) }
+        ),
+        // 网络设置
+        SettingItem.ClickAndOpenPage(
+            titleRes = R.string.Network,
+            pageRoute = Destinations.NETWORK,
+            icon = { Icon(Icons.Rounded.Wifi, contentDescription = null) }
         ),
         // Firebase设置
         SettingItem.ClickAndOpenPage(

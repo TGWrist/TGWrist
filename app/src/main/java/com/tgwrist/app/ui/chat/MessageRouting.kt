@@ -335,6 +335,17 @@ fun MessageRouting(
                 stringResource(R.string.msg_supergroup_created, senderName)
             }
         }
+        is TdApi.MessagePollOptionAdded -> {
+            SystemMessageWithSender(
+                modifier = modifier,
+                msg = msg,
+                youString = youString,
+                someoneString = someoneString,
+                transformation = transformation
+            ) { senderName ->
+                stringResource(R.string.msg_poll_option_added, senderName, content.text.text)
+            }
+        }
         else -> {
             MessageView(
                 modifier = modifier,

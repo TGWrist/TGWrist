@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -69,6 +70,10 @@ import androidx.wear.compose.material3.PagerScaffoldDefaults
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.TitleCard
+import androidx.wear.compose.material3.placeholder
+import androidx.wear.compose.material3.placeholderShimmer
+import androidx.wear.compose.material3.rememberPlaceholderState
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.compose.material3.openOnPhoneDialogCurvedText
@@ -96,18 +101,24 @@ private data class MessageGroup(
     val key: Long,
     val date: Int,
     val messages: List<TdApi.Message>,
-    val messageIds: List<Long>
+    val messageIds: List<Long>,
+    // true 表示该组是占位（消息内容尚未加载，messages 为空，仅 messageIds 有效）
+    val isPlaceholder: Boolean = false
 )
 
 // chatMessages is assumed to be already sorted by message id descending
-// (ChatMessagesRepository.getChatMessagesFlow sorts by TdApi.Message::id descending).
+// (ChatMessagesRepository.getChatMessagesFlow sorts by id descending; placeholder
+// items whose message is null are kept and carry their id).
 // TDLib message IDs encode their timestamp in the upper bits, so id-descending order
 // is equivalent to (date DESC, id DESC) for all practical purposes.
 //
 // Groups themselves are ordered descending (newest first) to match reverseLayout = true,
 // but messages *within* each group are sorted ascending (oldest first) to match the
 // official Telegram client's album order (e.g. "Video Photo Caption").
-private fun buildMessageGroups(chatMessages: List<TdApi.Message>): List<MessageGroup> {
+//
+// 占位条目（message == null）无法并入相册、也没有内容，因此每条都单独成一个占位组，
+// 这样滚动到它附近时 Repository 会按 id 把真实内容补回来。
+private fun buildMessageGroups(chatMessages: List<ChatMessagesRepository.ChatMessageItem>): List<MessageGroup> {
     if (chatMessages.isEmpty()) return emptyList()
 
     val groups = ArrayList<MessageGroup>(chatMessages.size)
@@ -136,7 +147,22 @@ private fun buildMessageGroups(chatMessages: List<TdApi.Message>): List<MessageG
         currentMessageIds = ArrayList(4)
     }
 
-    chatMessages.forEach { message ->
+    chatMessages.forEach { item ->
+        val message = item.message
+        if (message == null) {
+            // 占位条目：先结束当前累积的真实消息组，再单独成一个占位组
+            flushCurrentGroup()
+            // 占位组 key 用 (id shl 1) 与单条消息组保持同一编码，便于 index/key 计算复用
+            groups += MessageGroup(
+                key = (item.id shl 1),
+                date = 0,
+                messages = emptyList(),
+                messageIds = listOf(item.id),
+                isPlaceholder = true
+            )
+            return@forEach
+        }
+
         val mediaAlbumId = message.mediaAlbumId
         val shouldMergeIntoCurrentAlbum =
             mediaAlbumId != 0L &&
@@ -224,10 +250,58 @@ private fun findItemIndexByKey(
 
 /** 判断 messageGroups[index] 是否应显示日期头，与列表中逻辑一致 */
 private fun shouldShowDateHeader(messageGroups: List<MessageGroup>, index: Int): Boolean {
-    val date = messageGroups[index].date
-    return (index == messageGroups.lastIndex && index != 0) ||
-            (index < messageGroups.lastIndex &&
-                !isSameDay(date.toLong(), messageGroups[index + 1].date.toLong()))
+    val group = messageGroups[index]
+    // 占位组没有有效日期，不显示日期头
+    if (group.isPlaceholder) return false
+    val date = group.date
+    val next = messageGroups.getOrNull(index + 1)
+    return when {
+        index == messageGroups.lastIndex && index != 0 -> true
+        // 下一组是占位组时日期未知，不显示日期头，避免错误分隔
+        next == null || next.isPlaceholder -> false
+        else -> !isSameDay(date.toLong(), next.date.toLong())
+    }
+}
+
+/**
+ * 占位消息：当某条消息内容尚未加载（被裁剪为 null 或预加载未补齐）时显示。
+ *
+ * 使用 Wear Material3 的 placeholder + placeholderShimmer 形成微光闪动效果，
+ * 外形仿普通消息气泡（TitleCard），高度固定，避免列表跳动。
+ * 滚动到它附近时，Repository 会按 id 自动把真实内容补回来，届时整项会被替换为真实消息。
+ */
+@Composable
+private fun PlaceholderMessage(
+    modifier: Modifier = Modifier,
+    transformation: SurfaceTransformation?
+) {
+    // isVisible 恒为 true：内容加载完成后整项会被替换为真实消息，无需在此驱动收起动画
+    val placeholderState = rememberPlaceholderState(isVisible = true)
+    TitleCard(
+        onClick = {},
+        title = {
+            Text(
+                text = "",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .placeholderShimmer(placeholderState)
+                    .placeholder(placeholderState)
+            )
+        },
+        transformation = transformation,
+        modifier = modifier
+            .fillMaxWidth()
+            .placeholderShimmer(placeholderState)
+            .placeholder(placeholderState)
+    ) {
+        Text(
+            text = "",
+            modifier = Modifier
+                .fillMaxWidth()
+                .placeholderShimmer(placeholderState)
+                .placeholder(placeholderState)
+        )
+    }
 }
 
 @Composable
@@ -591,8 +665,8 @@ fun ChatScreen(chatId: Long) {
                                             key.startsWith("msgs_") -> {
                                                 val groupKey = key.removePrefix("msgs_").toLongOrNull() ?: return@collect
                                                 val group = messageGroups.firstOrNull { it.key == groupKey }
-                                                // 使用组中第一条消息的ID
-                                                group?.messages?.firstOrNull()?.id
+                                                // 使用组中第一条消息的ID（占位组 messages 为空，回退到 messageIds）
+                                                group?.messageIds?.firstOrNull()
                                             }
                                             key.startsWith("header_") -> null
                                             else -> null
@@ -666,12 +740,7 @@ fun ChatScreen(chatId: Long) {
                                 ) {
                                     messageGroups.forEachIndexed { index, group ->
                                         val date = group.date
-                                        val shouldShowHeader =
-                                            (index == messageGroups.lastIndex && index != 0) ||
-                                                (index < messageGroups.lastIndex &&
-                                                    !isSameDay(date.toLong(),
-                                                        messageGroups[index + 1].date.toLong()
-                                                    ))
+                                        val shouldShowHeader = shouldShowDateHeader(messageGroups, index)
 
                                         // 显示未读消息指示
                                         val shouldShowUnreadMarker =
@@ -690,7 +759,16 @@ fun ChatScreen(chatId: Long) {
                                         }
 
                                         item(key = "msgs_${group.key}") {
-                                            chatObject?.let {
+                                            if (group.isPlaceholder) {
+                                                // 占位组：消息内容尚未加载，显示加载占位
+                                                // 滚动到它附近时 Repository 会按 id 自动补回真实内容
+                                                PlaceholderMessage(
+                                                    modifier = Modifier
+                                                        .transformedHeight(this, transformationSpec)
+                                                        .padding(top = if (shouldShowHeader) 0.dp else 8.dp),
+                                                    transformation = SurfaceTransformation(transformationSpec)
+                                                )
+                                            } else chatObject?.let {
                                                 MessageRouting(
                                                     modifier = Modifier
                                                         .transformedHeight(this, transformationSpec)

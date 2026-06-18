@@ -645,13 +645,21 @@ fun Page2(chatObject: TdApi.Chat?) {
                                         // 有权限且选择为所有人删除：直接删除整个群组
                                         TgClient.send(TdApi.DeleteChat(c.id), handler)
                                     } else {
-                                        // 其他情况：退出群组/频道，随后删除本地历史
+                                        // 其他情况：退出群组/频道
                                         TgClient.send(TdApi.LeaveChat(c.id)) { leaveResult ->
                                             if (leaveResult is TdApi.Ok) {
-                                                TgClient.send(
-                                                    TdApi.DeleteChatHistory(c.id, true, revoke),
-                                                    handler
-                                                )
+                                                if (c.type is TdApi.ChatTypeBasicGroup) {
+                                                    // 普通群组：退群后手动清理本地残余历史并移除列表
+                                                    // 这里是单方面清理，revoke 必须强制为 false，避免权限不足报 400
+                                                    TgClient.send(
+                                                        TdApi.DeleteChatHistory(c.id, true, false),
+                                                        handler
+                                                    )
+                                                } else {
+                                                    // 超级群组/频道：退群后已自动失去访问权限并从列表移除，
+                                                    // 无需也无法调用 DeleteChatHistory，直接视为成功
+                                                    handler(TdApi.Ok())
+                                                }
                                             } else {
                                                 handler(leaveResult)
                                             }

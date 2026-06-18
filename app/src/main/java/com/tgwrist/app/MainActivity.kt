@@ -55,6 +55,8 @@ import com.tgwrist.app.ui.chat.ChatScreen
 import com.tgwrist.app.ui.login.SplashLoginScreen
 import com.tgwrist.app.ui.main.SplashMainScreen
 import com.tgwrist.app.ui.message.info.MessageInfo
+import com.tgwrist.app.ui.settings.AddProxyScreen
+import com.tgwrist.app.ui.settings.NetworkSettingsScreen
 import com.tgwrist.app.ui.settings.SplashSettingsScreen
 import com.tgwrist.app.ui.theme.TGWristTheme
 import com.tgwrist.app.utils.GlobalAppState
@@ -340,6 +342,16 @@ class MainActivity : ComponentActivity() {
                             // 关于
                             composable(Destinations.ABOUT) {
                                 AboutScreen()
+                            }
+
+                            // 网络设置
+                            composable(Destinations.NETWORK) {
+                                NetworkSettingsScreen()
+                            }
+
+                            // 添加代理
+                            composable(Destinations.ADD_PROXY) {
+                                AddProxyScreen()
                             }
 
                             // 设置页面

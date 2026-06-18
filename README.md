@@ -45,7 +45,7 @@ Google Play provides the version best suited for your device, usually with a sma
 
 If you still want to install the APK manually:
 
-1. Download the APK from GitHub Releases.
+1. Download the APK from GitHub Releases. If multiple APKs are provided, choose the one that matches your watch architecture, such as `full`, `arm32`, or `arm64`.
 2. Install it with ADB:
 
 ```shell
@@ -55,14 +55,24 @@ adb install TGWrist.apk
 ## Features
 
 - Run independently on Wear OS without relying on your phone
-- Browse chat lists, read message history, and receive timely message notifications through FCM
-- Send text messages, voice messages, and photo or video messages directly from your watch
-- Select one or more messages with a long press for quick actions
-- Reply to messages and forward one or multiple messages, with options such as hiding the sender name or removing captions when supported
+- Browse all chats, archived chats, and chat folders with unread counts, chat avatars, online/member updates, and preserved scroll position
+- Read message history with unread-message targeting, jump-to-latest support, typing/uploading/recording status, and reliable paged loading
+- Receive FCM-backed Telegram notifications with grouped message notifications, stable chat opening, mark-as-read actions, and quick replies from the watch
+- Send text messages, voice messages, and photo or video messages directly from your watch, including albums when multiple media items are selected
+- Manage accounts on the watch, including adding accounts, logging out, and deleting local account data
+- Select one or more messages with a long press, cancel selected reply or forward targets, and avoid duplicate forwarded message entries
+- Reply to messages, edit text or captions on supported message types, replace editable media with a selected photo or video, and delete messages for yourself or everyone when Telegram permits it
+- Forward one or multiple messages with options such as hiding the sender name or removing captions when supported
+- Open `tg://` and Telegram links for public chats, message links, bot start links, and invite links, including invite previews and joining groups or channels from the watch
 - Make and receive Telegram VoIP calls, with incoming call notifications, call status updates, and audio output switching
-- Preview, download, play, and save supported media from message details
-- Supported message rendering includes text, photos, videos, documents, GIF/animations, animated emoji, stickers, voice notes, video notes, audio files, and call records
-- Supports chat list, message history, message previews, media albums, and interaction info updates
+- Preview, download, open externally, play, and save supported media from message details, with built-in video playback plus tap and drag seeking for audio files, voice notes, and voice recording previews
+- View message details such as sender, reply target, topic, pinned status, view/forward counts, reactions, translated text, and selectable or copyable rich text
+- View location messages with latitude, longitude, accuracy, live location fields, coordinate copying, and map opening
+- View and interact with polls and quizzes, including single-choice and multiple-choice voting, result display, quiz explanations, revoting when allowed, and stopping editable polls
+- Manage storage from settings by viewing and clearing photos, temporary files, documents, thumbnails, voice messages, and videos
+- Supported message rendering includes text, photos, videos, documents, GIF/animations, animated emoji, stickers, voice notes, video notes, audio files, locations, live locations, polls, quizzes, call records, and many Telegram service messages
+- Manage network connection through direct mode or SOCKS5, HTTP, and MTProto proxies from login and settings, with saved proxy lists and automatic reapplication after account or TDLib restarts
+- Supports chat list, message history, message previews, media albums, interaction info updates, shimmer placeholders for trimmed messages, and memory-aware chat message caching for low-memory devices
 
 ## Design Details
 

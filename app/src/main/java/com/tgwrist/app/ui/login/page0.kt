@@ -17,6 +17,7 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,7 @@ import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.EdgeButton
 import androidx.wear.compose.material3.EdgeButtonSize
+import androidx.wear.compose.material3.FilledTonalButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
@@ -55,6 +57,8 @@ import com.tgwrist.app.TGWrist
 import com.tgwrist.app.ui.settings.disableNotification
 import com.tgwrist.app.ui.settings.registerFcmAndEnableNotification
 import com.tgwrist.app.runtime.Config
+import com.tgwrist.app.ui.Destinations
+import com.tgwrist.app.utils.LocalGlobalAppState
 
 @Composable
 fun Page0(nextPage: () -> Unit) {
@@ -62,6 +66,8 @@ fun Page0(nextPage: () -> Unit) {
     val overscroll = rememberOverscrollEffect()
     val transformationSpec = rememberTransformationSpec()
     val context = LocalContext.current
+    val appState = LocalGlobalAppState.current
+    val navController = appState.navController
 
     // Firebase 开关状态
     var fcmEnabled by remember { mutableStateOf(Firebase.messaging.isAutoInitEnabled) }
@@ -168,7 +174,25 @@ fun Page0(nextPage: () -> Unit) {
                 }
             }
 
-            // 功能提示
+            // 网络设置
+            item {
+                FilledTonalButton(
+                    onClick = {
+                        navController?.navigate(Destinations.NETWORK)
+                    },
+                    transformation = SurfaceTransformation(transformationSpec),
+                    icon = {
+                        Icon(Icons.Rounded.Wifi, contentDescription = null)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .transformedHeight(this, transformationSpec)
+                ) {
+                    Text(stringResource(R.string.Network_settings))
+                }
+            }
+
+            // 谷歌相关功能提示
             item {
                 Text(
                     text = stringResource(R.string.welcome_firebase_hint),

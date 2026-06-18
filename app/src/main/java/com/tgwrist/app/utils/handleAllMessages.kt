@@ -125,6 +125,11 @@ fun handleAllMessages(
         is TdApi.MessageStakeDice -> buildAnnotatedString { appendLabel(R.string.msg_type_stake_dice) }
         // 投票/测验
         is TdApi.MessagePoll -> buildAnnotatedString { appendLabel(R.string.msg_type_poll) }
+        // 添加了投票选项
+        is TdApi.MessagePollOptionAdded -> buildAnnotatedString {
+            appendLabel(R.string.msg_type_poll_option_added)
+            if (includeCaption) appendCaption(content.text.text)
+        }
         // HTML5 游戏
         is TdApi.MessageGame -> buildAnnotatedString { appendLabel(R.string.msg_type_game) }
         // 游戏新高分
@@ -310,7 +315,7 @@ fun handleAllMessages(
 
 
 /*
-97 个类型逐项与 handleAllMessages.kt 中已有的 is TdApi.XXX -> 分支做了对照，全部已支持。
+98 个类型逐项与 handleAllMessages.kt 中已有的 is TdApi.XXX -> 分支做了对照，全部已支持。
 详细对照（按你给的顺序）：
 #
 类型
@@ -517,93 +522,96 @@ handleAllMessages.kt:187
 TdApi.MessagePoll
 handleAllMessages.kt:127
 68
+TdApi.MessagePollOptionAdded
+handleAllMessages.kt:129
+69
 TdApi.MessagePremiumGiftCode
 handleAllMessages.kt:251
-69
+70
 TdApi.MessageProximityAlertTriggered
 handleAllMessages.kt:195
-70
+71
 TdApi.MessageRefundedUpgradedGift
 handleAllMessages.kt:259
-71
+72
 TdApi.MessageScreenshotTaken
 handleAllMessages.kt:189
-72
+73
 TdApi.MessageStakeDice
 handleAllMessages.kt:125
-73
+74
 TdApi.MessageSticker
 handleAllMessages.kt:100
-74
+75
 TdApi.MessageStory
 handleAllMessages.kt:133
-75
+76
 TdApi.MessageSuggestBirthdate
 handleAllMessages.kt:283
-76
+77
 TdApi.MessageSuggestedPostApprovalFailed
 handleAllMessages.kt:289
-77
+78
 TdApi.MessageSuggestedPostApproved
 handleAllMessages.kt:291
-78
+79
 TdApi.MessageSuggestedPostDeclined
 handleAllMessages.kt:293
-79
+80
 TdApi.MessageSuggestedPostPaid
 handleAllMessages.kt:295
-80
+81
 TdApi.MessageSuggestedPostRefunded
 handleAllMessages.kt:297
-81
+82
 TdApi.MessageSuggestProfilePhoto
 handleAllMessages.kt:285
-82
+83
 TdApi.MessageSupergroupChatCreate
 handleAllMessages.kt:149
-83
+84
 TdApi.MessageText
 handleAllMessages.kt:46
-84
+85
 TdApi.MessageUnsupported
 handleAllMessages.kt:305
-85
+86
 TdApi.MessageUpgradedGift
 handleAllMessages.kt:253
-86
+87
 TdApi.MessageUpgradedGiftPurchaseOffer
 handleAllMessages.kt:255
-87
+88
 TdApi.MessageUpgradedGiftPurchaseOfferRejected
 handleAllMessages.kt:257
-88
+89
 TdApi.MessageUsersShared
 handleAllMessages.kt:281
-89
+90
 TdApi.MessageVenue
 handleAllMessages.kt:121
-90
+91
 TdApi.MessageVideo
 handleAllMessages.kt:58
-91
+92
 TdApi.MessageVideoChatEnded
 handleAllMessages.kt:225
-92
+93
 TdApi.MessageVideoChatScheduled
 handleAllMessages.kt:227
-93
+94
 TdApi.MessageVideoChatStarted
 handleAllMessages.kt:229
-94
+95
 TdApi.MessageVideoNote
 handleAllMessages.kt:91
-95
+96
 TdApi.MessageVoiceNote
 handleAllMessages.kt:63
-96
+97
 TdApi.MessageWebAppDataReceived
 handleAllMessages.kt:301
-97
+98
 TdApi.MessageWebAppDataSent
 handleAllMessages.kt:303
 */

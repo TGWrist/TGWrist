@@ -3,6 +3,8 @@ package com.tgwrist.app.ui.message.info.message.renderer
 import android.media.MediaPlayer
 import android.widget.Toast
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -152,6 +155,8 @@ fun VoiceNoteMessageRenderer(
     var isPlaying by remember { mutableStateOf(false) }
     var playbackPositionMs by remember { mutableIntStateOf(0) }
     var playbackDurationMs by remember { mutableIntStateOf(duration * 1000) }
+    // 用户正在拖动波形时暂停进度轮询写入，避免回弹
+    var isSeeking by remember { mutableStateOf(false) }
 
     // ========== 初始化文件状态 ==========
     LaunchedEffect(Unit) {
@@ -214,7 +219,7 @@ fun VoiceNoteMessageRenderer(
         while (isPlaying && this.coroutineContext.isActive) {
             mediaPlayer?.let { mp ->
                 runCatching {
-                    if (mp.isPlaying) {
+                    if (mp.isPlaying && !isSeeking) {
                         playbackPositionMs = mp.currentPosition
                     }
                 }
@@ -314,6 +319,15 @@ fun VoiceNoteMessageRenderer(
         }
     }
 
+    // 根据波形上的比例跳转播放位置
+    fun seekToFraction(fraction: Float) {
+        val clamped = fraction.coerceIn(0f, 1f)
+        val targetMs = (playbackDurationMs * clamped).toInt()
+        // 先更新 UI，保证拖动跟手
+        playbackPositionMs = targetMs
+        runCatching { mediaPlayer?.seekTo(targetMs) }
+    }
+
     // ========== UI ==========
     val listState = rememberTransformingLazyColumnState()
     val overscroll = rememberOverscrollEffect()
@@ -373,7 +387,34 @@ fun VoiceNoteMessageRenderer(
                                     .padding(horizontal = 12.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Canvas(modifier = Modifier.fillMaxSize()) {
+                                Canvas(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .pointerInput(Unit) {
+                                            detectTapGestures { offset ->
+                                                if (size.width > 0) {
+                                                    seekToFraction(offset.x / size.width.toFloat())
+                                                }
+                                            }
+                                        }
+                                        .pointerInput(Unit) {
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { offset ->
+                                                    isSeeking = true
+                                                    if (size.width > 0) {
+                                                        seekToFraction(offset.x / size.width.toFloat())
+                                                    }
+                                                },
+                                                onDragEnd = { isSeeking = false },
+                                                onDragCancel = { isSeeking = false },
+                                                onHorizontalDrag = { change, _ ->
+                                                    if (size.width > 0) {
+                                                        seekToFraction(change.position.x / size.width.toFloat())
+                                                    }
+                                                }
+                                            )
+                                        }
+                                ) {
                                     val barCount = waveformBars.size
                                     val totalWidth = size.width
                                     val totalHeight = size.height

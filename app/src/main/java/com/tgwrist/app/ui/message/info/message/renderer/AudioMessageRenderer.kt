@@ -8,6 +8,8 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -199,18 +203,21 @@ fun AudioMessageRenderer(
     var playbackPositionMs by remember(fileId) { mutableIntStateOf(0) }
     var playbackDurationMs by remember(fileId) { mutableIntStateOf(duration * 1000) }
 
+    // 拖动跳转状态
+    var isSeeking by remember(fileId) { mutableStateOf(false) }
+    var seekFraction by remember(fileId) { mutableFloatStateOf(0f) }
+
     // ========== 初始化文件状态 ==========
     LaunchedEffect(fileId) {
-        val initialFile = audioFile
-        if (initialFile.local.isDownloadingCompleted) {
-            fileLocalPath = initialFile.local.path
+        if (audioFile.local.isDownloadingCompleted) {
+            fileLocalPath = audioFile.local.path
             downloadProgress = 1f
-        } else if (initialFile.local.isDownloadingActive) {
+        } else if (audioFile.local.isDownloadingActive) {
             isDownloading = true
             downloadProgress = audioCalculateProgress(
-                initialFile.local.downloadedSize,
-                initialFile.size,
-                initialFile.expectedSize
+                audioFile.local.downloadedSize,
+                audioFile.size,
+                audioFile.expectedSize
             )
         }
 
@@ -267,7 +274,7 @@ fun AudioMessageRenderer(
         while (isPlaying && this.coroutineContext.isActive) {
             mediaPlayer?.let { mp ->
                 runCatching {
-                    if (mp.isPlaying) {
+                    if (mp.isPlaying && !isSeeking) {
                         playbackPositionMs = mp.currentPosition
                     }
                 }
@@ -363,6 +370,16 @@ fun AudioMessageRenderer(
             mp.start()
             isPlaying = true
         }
+    }
+
+    fun seekToFraction(fraction: Float) {
+        val mp = mediaPlayer ?: return
+        val clamped = fraction.coerceIn(0f, 1f)
+        val targetMs = (playbackDurationMs * clamped).toInt()
+        runCatching {
+            mp.seekTo(targetMs.toLong(), MediaPlayer.SEEK_CLOSEST)
+        }
+        playbackPositionMs = targetMs
     }
 
     // ========== 保存到媒体库（Music 目录） ==========
@@ -476,10 +493,6 @@ fun AudioMessageRenderer(
     val overscroll = rememberOverscrollEffect()
     val transformationSpec = rememberTransformationSpec()
 
-    val playProgress = if (playbackDurationMs > 0) {
-        (playbackPositionMs.toFloat() / playbackDurationMs.toFloat()).coerceIn(0f, 1f)
-    } else 0f
-
     ScreenScaffold(
         scrollState = listState,
         overscrollEffect = overscroll,
@@ -565,8 +578,8 @@ fun AudioMessageRenderer(
 
             // ========== 播放进度条 + 时长文字 ==========
             item(key = "playback_progress") {
-                val totalDurationSec = (playbackDurationMs / 1000).takeIf { it > 0 } ?: duration
-                val currentSec = (playbackPositionMs / 1000).coerceAtLeast(0)
+                val canSeek = mediaPlayer != null && playbackDurationMs > 0
+                var barWidthPx by remember { mutableFloatStateOf(0f) }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -575,13 +588,64 @@ fun AudioMessageRenderer(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     LinearProgressIndicator(
-                        progress = { playProgress },
+                        // 在 draw lambda 内直接读取 state，确保进度条每帧重绘，无需重组
+                        progress = {
+                            if (isSeeking) {
+                                seekFraction
+                            } else if (playbackDurationMs > 0) {
+                                (playbackPositionMs.toFloat() / playbackDurationMs.toFloat())
+                                    .coerceIn(0f, 1f)
+                            } else 0f
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(6.dp)
+                            .height(10.dp)
                             .clip(CircleShape)
+                            .onSizeChanged { barWidthPx = it.width.toFloat() }
+                            .then(
+                                Modifier.pointerInput(canSeek) {
+                                    detectTapGestures { offset ->
+                                        val fraction =
+                                            if (barWidthPx > 0f) (offset.x / barWidthPx).coerceIn(
+                                                0f,
+                                                1f
+                                            ) else 0f
+                                        seekToFraction(fraction)
+                                    }
+                                }
+                            )
+                            .then(
+                                Modifier.pointerInput(canSeek) {
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { offset ->
+                                            isSeeking = true
+                                            seekFraction =
+                                                if (barWidthPx > 0f) (offset.x / barWidthPx).coerceIn(
+                                                    0f,
+                                                    1f
+                                                ) else 0f
+                                        },
+                                        onHorizontalDrag = { change, _ ->
+                                            seekFraction =
+                                                if (barWidthPx > 0f) (change.position.x / barWidthPx).coerceIn(
+                                                    0f,
+                                                    1f
+                                                ) else seekFraction
+                                        },
+                                        onDragEnd = {
+                                            seekToFraction(seekFraction)
+                                            isSeeking = false
+                                        },
+                                        onDragCancel = { isSeeking = false }
+                                    )
+                                }
+                            )
                     )
                     Spacer(modifier = Modifier.height(4.dp))
+                    val totalDurationSec = (playbackDurationMs / 1000).takeIf { it > 0 } ?: duration
+                    val displayPositionMs =
+                        if (isSeeking) (playbackDurationMs * seekFraction).toInt() else playbackPositionMs
+                    val currentSec = (displayPositionMs / 1000).coerceAtLeast(0)
                     Text(
                         text = "${audioFormatDuration(currentSec)} / ${audioFormatDuration(totalDurationSec)}",
                         style = MaterialTheme.typography.labelSmall,

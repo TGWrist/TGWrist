@@ -8,7 +8,9 @@ import com.tgwrist.app.ui.message.info.message.renderer.AnimationMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.AudioMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.CallMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.DocumentMessageRenderer
+import com.tgwrist.app.ui.message.info.message.renderer.LocationMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.PhotoMessageRenderer
+import com.tgwrist.app.ui.message.info.message.renderer.PollMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.StickerMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.TextMessageRenderer
 import com.tgwrist.app.ui.message.info.message.renderer.UnknownMessageRenderer
@@ -80,6 +82,14 @@ object MessageContentFactory {
         // 注册音频文件
         register<TdApi.MessageAudio> { content, messageRenderContext ->
             AudioMessageRenderer(content, messageRenderContext)
+        },
+        // 注册位置消息
+        register<TdApi.MessageLocation> { content, messageRenderContext ->
+            LocationMessageRenderer(content, messageRenderContext)
+        },
+        // 注册投票消息
+        register<TdApi.MessagePoll> { content, messageRenderContext ->
+            PollMessageRenderer(content, messageRenderContext)
         }
     )
 

@@ -21,6 +21,8 @@ object Destinations {
     const val TEXT_VIEW = "TextView?text={text}&textId={textId}"
     const val MESSAGE_INFO = "messageInfo/{chatId}/{key}/{showMsgsInfo}"
     const val MEDIA_PICKER = "mediaPicker"
+    const val NETWORK = "network"
+    const val ADD_PROXY = "addProxy"
     const val TEST = "test"
     // 方便跳转的辅助函数
     fun chat(id: Long) = "chat/$id"

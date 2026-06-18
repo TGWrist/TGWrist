@@ -5,12 +5,17 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.edit
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.tgwrist.app.data.ChatFolderInfo
 import com.tgwrist.app.data.ForwardMessages
+import com.tgwrist.app.data.ProxyInfo
+import com.tgwrist.app.data.ProxyKind
 import com.tgwrist.app.data.ReplyMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.drinkless.tdlib.TdApi
+import java.util.UUID
 
 object Config {
     // MainActivity 是否存在
@@ -76,6 +81,22 @@ object Config {
     // SharedPreferences（在 Application 的 onCreate 里初始化）
     private lateinit var prefs: SharedPreferences
 
+    // Gson 实例，用于代理列表序列化
+    private val gson = Gson()
+
+    // 代理列表持久化 key
+    private const val KEY_PROXIES = "proxies"
+    // 当前选中的代理 id（为空表示不使用代理 / 直连）
+    private const val KEY_ACTIVE_PROXY_ID = "activeProxyId"
+
+    // 本地保存的代理列表（StateFlow 供 Compose 订阅）
+    private val _proxies = MutableStateFlow<List<ProxyInfo>>(emptyList())
+    val proxiesFlow = _proxies.asStateFlow()
+
+    // 当前选中的代理 id（StateFlow 供 Compose 订阅）
+    private val _activeProxyId = MutableStateFlow<String?>(null)
+    val activeProxyIdFlow = _activeProxyId.asStateFlow()
+
     // 存储可用的 accent colors（只取 darkThemeColors）
     private val _accentColorList = MutableStateFlow<Map<Int, Color>>(
         mutableMapOf(
@@ -104,6 +125,7 @@ object Config {
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         _isOpenNotification.value = prefs.getBoolean("isOpenNotification", false)
+        loadProxies()
 
         // 订阅连接状态更新
         // 订阅连接状态更新
@@ -149,6 +171,10 @@ object Config {
                         }
                     }
                 }
+            } else if (update.authorizationState is TdApi.AuthorizationStateWaitTdlibParameters) {
+                // 每次 tdlib 启动（多账户切换 / 重新初始化都会换一个 tdlib 实例）都要重新下发选中的代理。
+                // AddProxy / DisableProxy 允许在授权前调用，所以这里直接下发即可。
+                applyActiveProxyOnStart()
             }
         }
 
@@ -241,5 +267,117 @@ object Config {
 
         // 原子替换整个 map
         _accentColorList.value = map
+    }
+
+    // ============================== 代理（Proxy） ==============================
+
+    /**
+     * 从 SharedPreferences 加载代理列表与当前选中代理到内存。
+     */
+    private fun loadProxies() {
+        val json = prefs.getString(KEY_PROXIES, "[]")
+        val type = object : TypeToken<List<ProxyInfo>>() {}.type
+        _proxies.value = runCatching { gson.fromJson<List<ProxyInfo>>(json, type) }
+            .getOrNull() ?: emptyList()
+        _activeProxyId.value = prefs.getString(KEY_ACTIVE_PROXY_ID, null)
+            ?.takeIf { id -> _proxies.value.any { it.id == id } }
+    }
+
+    /**
+     * 持久化当前内存中的代理列表。
+     */
+    private fun saveProxies() {
+        prefs.edit { putString(KEY_PROXIES, gson.toJson(_proxies.value)) }
+    }
+
+    /**
+     * 获取已保存的全部代理（只读快照）。
+     */
+    fun getProxies(): List<ProxyInfo> = _proxies.value
+
+    /**
+     * 获取当前选中的代理；未选中 / 直连时返回 null。
+     */
+    fun getActiveProxy(): ProxyInfo? =
+        _activeProxyId.value?.let { id -> _proxies.value.find { it.id == id } }
+
+    /**
+     * 添加一个代理并保存到本地。
+     *
+     * @param setActive 是否在添加后立即将其设为当前选中代理（默认 true）
+     * @return 新创建的 [ProxyInfo]
+     */
+    fun addProxy(
+        server: String,
+        port: Int,
+        type: ProxyKind,
+        username: String = "",
+        password: String = "",
+        secret: String = "",
+        httpOnly: Boolean = false,
+        setActive: Boolean = true
+    ): ProxyInfo {
+        val proxy = ProxyInfo(
+            id = UUID.randomUUID().toString(),
+            server = server,
+            port = port,
+            type = type,
+            username = username,
+            password = password,
+            secret = secret,
+            httpOnly = httpOnly
+        )
+        _proxies.value = _proxies.value + proxy
+        saveProxies()
+        if (setActive) setActiveProxy(proxy.id)
+        return proxy
+    }
+
+    /**
+     * 删除指定代理。若删除的是当前选中代理，则自动切换为直连。
+     */
+    fun removeProxy(proxyId: String) {
+        _proxies.value = _proxies.value.filterNot { it.id == proxyId }
+        saveProxies()
+        if (_activeProxyId.value == proxyId) setActiveProxy(null)
+    }
+
+    /**
+     * 设置当前选中代理（传 null 表示直连），并立即对正在运行的 tdlib 生效。
+     *
+     * 注意：仅更新内存 + 本地记录，并尝试对当前 tdlib 实例 enable/disable；
+     * 真正在多账户下「每次 tdlib 启动时下发」由 [applyActiveProxyOnStart] 完成。
+     */
+    fun setActiveProxy(proxyId: String?) {
+        val normalized = proxyId?.takeIf { id -> _proxies.value.any { it.id == id } }
+        _activeProxyId.value = normalized
+        prefs.edit {
+            if (normalized == null) remove(KEY_ACTIVE_PROXY_ID)
+            else putString(KEY_ACTIVE_PROXY_ID, normalized)
+        }
+        applyActiveProxyOnStart()
+    }
+
+    /**
+     * 把当前选中代理下发给 tdlib。
+     *
+     * 应在每次 tdlib 启动（AuthorizationStateWaitTdlibParameters）后调用，
+     * 因为代理列表保存在「每个账号各自的 tdlib 数据库」中，多账户切换 /
+     * 重新初始化都会换一个 tdlib 实例，需要重新下发。
+     *
+     * - 选中某代理：AddProxy(enable = true) 直接添加并启用。
+     * - 直连：DisableProxy() 关闭当前启用的代理。
+     */
+    fun applyActiveProxyOnStart() {
+        val active = getActiveProxy()
+        if (active == null) {
+            TgClient.send(TdApi.DisableProxy()) { result ->
+                Log.d("Config-Tdlib", "DisableProxy result: $result")
+            }
+        } else {
+            TgClient.send(TdApi.AddProxy(active.toTdProxy(), true)) { result ->
+                Log.d("Config-Tdlib", "AddProxy result: $result")
+            }
+        }
     }
 }

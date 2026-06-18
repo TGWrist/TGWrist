@@ -21,8 +21,30 @@ android {
         applicationId = "com.tgwrist.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "3.9.2"
+        versionCode = 31
+        versionName = "3.9.3"
+    }
+
+    flavorDimensions += "abi"
+    productFlavors {
+        create("full") {
+            dimension = "abi"
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            }
+        }
+        create("arm32") {
+            dimension = "abi"
+            ndk {
+                abiFilters += listOf("armeabi-v7a")
+            }
+        }
+        create("arm64") {
+            dimension = "abi"
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
+        }
     }
 
     signingConfigs {
@@ -127,7 +149,6 @@ dependencies {
     implementation(libs.lottie.compose)
     implementation(libs.relinker)
     implementation(libs.checker.qual)
-    androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.ui.test.junit4)
     debugImplementation(libs.ui.tooling)
     debugImplementation(libs.ui.test.manifest)

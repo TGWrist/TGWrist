@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -35,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -73,9 +76,13 @@ fun VoiceRecordingDisplay(
     previewPositionMs: Long,
     previewTotalMs: Long,
     onTogglePreview: () -> Unit,
+    onSeek: (Float) -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
     val idle = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+
+    // 拖动过程中临时显示的进度（0..1），非拖动时为 null，使用播放器实际位置
+    var dragProgress by remember { mutableStateOf<Float?>(null) }
 
     Box(
         modifier = modifier
@@ -112,13 +119,37 @@ fun VoiceRecordingDisplay(
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    val progress = if (previewTotalMs > 0L) {
+                    val playerProgress = if (previewTotalMs > 0L) {
                         (previewPositionMs.toFloat() / previewTotalMs.toFloat()).coerceIn(0f, 1f)
                     } else 0f
+                    val progress = dragProgress ?: playerProgress
                     Box(
                         modifier = Modifier
                             .height(40.dp)
-                            .weight(1f),
+                            .weight(1f)
+                            .pointerInput(Unit) {
+                                detectTapGestures { offset ->
+                                    val ratio = (offset.x / size.width).coerceIn(0f, 1f)
+                                    onSeek(ratio)
+                                }
+                            }
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        dragProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                                    },
+                                    onDrag = { change, _ ->
+                                        dragProgress = (change.position.x / size.width).coerceIn(0f, 1f)
+                                    },
+                                    onDragEnd = {
+                                        dragProgress?.let { onSeek(it) }
+                                        dragProgress = null
+                                    },
+                                    onDragCancel = {
+                                        dragProgress = null
+                                    }
+                                )
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         WaveformBars(

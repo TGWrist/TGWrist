@@ -3,6 +3,7 @@ package com.tgwrist.app.runtime
 import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.tgwrist.app.TGWrist
 import com.tgwrist.app.utils.copy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -151,15 +152,30 @@ object ChatMessagesRepository {
     }
 
     /**
+     * 暴露给 UI 的单条消息条目。
+     *
+     * [message] 为 null 表示该 id 当前是占位锚点（被 [trimDistantMessages] 裁剪掉内容，
+     * 或前后预加载尚未补齐），UI 可以据此渲染加载占位。无论是否 null，[id] 始终有效，
+     * 用于排序、LazyColumn 稳定 key、分组以及预加载触发。
+     */
+    data class ChatMessageItem(val id: Long, val message: TdApi.Message?)
+
+    /**
      * UI 订阅某个 chat 的消息列表。
      *
      * 内部缓存按 messageId 存 Map，这里转成 List 并按 id 倒序排列，方便聊天页直接渲染。
+     * 注意：占位（value 为 null）的条目会保留，并携带其 id，由 UI 决定如何展示加载占位。
      */
-    fun getChatMessagesFlow(chatId: Long): Flow<List<TdApi.Message>> =
+    fun getChatMessagesFlow(chatId: Long): Flow<List<ChatMessageItem>> =
         _messagesByChat
             .map { it[chatId] }
             .distinctUntilChanged()
-            .map { it?.values?.filterNotNull()?.sortedByDescending(TdApi.Message::id) ?: emptyList() }
+            .map { chatMap ->
+                chatMap?.entries
+                    ?.sortedByDescending { it.key }
+                    ?.map { ChatMessageItem(it.key, it.value) }
+                    ?: emptyList()
+            }
 
     /**
      * 获取某个 chat 的出站消息已读位置 Flow
@@ -223,6 +239,34 @@ object ChatMessagesRepository {
     private const val MAX_RETRY_COUNT = 3
     private const val BASE_RETRY_DELAY_MS = 1000L // 初始重试延迟 1 秒，之后指数退避
     private const val TD_REQUEST_TIMEOUT_MS = 15_000L
+
+    // 单个 chat 缓存的“已加载内容”消息上限，以及裁剪时围绕当前查看消息保留的半径。
+    // 根据设备给本 app 分配的堆上限（ActivityManager.memoryClass，单位 MB）动态分档：
+    // 手表等低端设备 memoryClass 小，放少一些；高端设备放多一些。
+    // 超过上限后会把窗口外的消息内容置为 null（占位），仅保留 messageId 作为锚点。
+    private val MAX_MATERIALIZED_MESSAGES: Int by lazy { deviceMessageBudget().first }
+    private val KEEP_WINDOW_RADIUS: Int by lazy { deviceMessageBudget().second }
+
+    /**
+     * 依据设备内存等级返回 (消息上限, 保留半径)。半径约为上限的 40%，保证裁剪后窗口内仍然连续。
+     */
+    private fun deviceMessageBudget(): Pair<Int, Int> {
+        val memoryClassMb = runCatching {
+            val am = TGWrist.context.getSystemService(android.content.Context.ACTIVITY_SERVICE)
+                as android.app.ActivityManager
+            // largeHeap 不开启时 memoryClass 即为可用堆上限
+            am.memoryClass
+        }.getOrDefault(0)
+
+        val max = when {
+            memoryClassMb <= 0 -> 300        // 取不到信息时给一个中等默认值
+            memoryClassMb < 64 -> 150
+            memoryClassMb < 128 -> 300
+            memoryClassMb < 256 -> 500
+            else -> 800
+        }
+        return max to (max * 2 / 5)
+    }
 
     /**
      * 把 TDLib 的 callback 风格请求转换成 suspend 函数，方便用顺序代码写重试和状态更新。
@@ -772,6 +816,11 @@ object ChatMessagesRepository {
                     Log.d("ChatMessagesRepository", "[CMR-ANCHOR] loadNewer chatId=$chatId → skip(inflight)")
                     immediateResult = LoadNewerResult(0, false, "inflight")
                 }
+                chatId in olderLoadInflight -> {
+                    // 旧消息正在加载时，不接受加载新消息，避免新旧方向并发拉取
+                    Log.d("ChatMessagesRepository", "[CMR-ANCHOR] loadNewer chatId=$chatId → skip(older loading)")
+                    immediateResult = LoadNewerResult(0, false, "older loading")
+                }
                 else -> {
                     anchorToLoad = newerAnchorMessageId[chatId]
                     newerLoadInflight.add(chatId)
@@ -1043,6 +1092,8 @@ object ChatMessagesRepository {
         // 异步检查并预加载
         scope.launch {
             checkAndPreloadAroundMessage(chatId, messageId)
+            // 预加载完成后，把远离当前查看位置的消息裁剪为占位（null），控制内存占用
+            trimDistantMessages(chatId, messageId)
         }
     }
 
@@ -1120,6 +1171,46 @@ object ChatMessagesRepository {
             synchronized(lock) {
                 preloadInflight[chatId] = false
             }
+        }
+    }
+
+    /**
+     * 当已加载内容的消息数量超过上限时，把远离当前查看位置的消息内容置为 null（占位）。
+     * 仅清空 message 内容，保留 messageId 作为锚点，这样：
+     * 1. 列表顺序、分页锚点不受影响；
+     * 2. 用户滚回去时，checkAndPreloadAroundMessage 会重新按 id 拉取这些占位消息。
+     */
+    private fun trimDistantMessages(chatId: Long, viewingMessageId: Long) {
+        if (!isChatActive(chatId)) return
+
+        _messagesByChat.update { prev ->
+            val current = prev[chatId] ?: return@update prev
+
+            // 只统计已加载内容（非 null）的消息数量
+            val materializedCount = current.count { it.value != null }
+            if (materializedCount <= MAX_MATERIALIZED_MESSAGES) return@update prev
+
+            val sortedIds = current.keys.sorted()
+            // 以当前查看的消息为中心；找不到时退化为列表末尾（最新消息）附近
+            val centerIndex = sortedIds.indexOf(viewingMessageId)
+                .let { if (it == -1) sortedIds.lastIndex else it }
+
+            val keepFromIndex = (centerIndex - KEEP_WINDOW_RADIUS).coerceAtLeast(0)
+            val keepToIndex = (centerIndex + KEEP_WINDOW_RADIUS).coerceAtMost(sortedIds.lastIndex)
+
+            var changed = false
+            val newChatMap = current.toMutableMap()
+            sortedIds.forEachIndexed { index, id ->
+                val insideWindow = index in keepFromIndex..keepToIndex
+                if (!insideWindow && newChatMap[id] != null) {
+                    // 置为 null 占位，仅保留 id 锚点
+                    newChatMap[id] = null
+                    changed = true
+                }
+            }
+
+            if (!changed) return@update prev
+            prev + (chatId to newChatMap.toMap())
         }
     }
 
