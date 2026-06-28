@@ -1,12 +1,16 @@
 <resources>
     <string name="app_name" translatable="false">TG Wrist</string>
-    <string name="Phone_Number">Phone Number (+)</string>
+    <string name="Phone_Number">Phone Number</string>
     <string name="Login">Login</string>
     <string name="Login_code">Login code</string>
     <string name="Enter_login_code">Enter login code</string>
     <string name="Password">Password</string>
     <string name="Enter_password">Enter password</string>
     <string name="Login_successful">Login successful</string>
+    <string name="Login_with_QR">Log in with QR code</string>
+    <string name="QR_login">QR code login</string>
+    <string name="QR_login_tip">Open Telegram on another logged-in device, go to Settings → Devices → Link Desktop Device, and scan this code.</string>
+    <string name="QR_login_loading">Generating QR code…</string>
     <string name="Info">Info</string>
     <string name="Request_error">Request error</string>
     <string name="Chats">Chats</string>
@@ -60,7 +64,7 @@
     <string name="Confirm">Confirm</string>
     <string name="Confirm_delete_account">Are you sure you want to delete account %s</string>
     <string name="Logout">Logout</string>
-    <string name="Invalid_phone_number">The entered mobile phone number must include the area code and cannot contain spaces, for example, +10000000000</string>
+    <string name="Invalid_phone_number">Phone number must include a country code. The country code should be entered before the phone number (e.g., 1 555 123 4567).</string>
     <string name="Push_notification">Push notification</string>
     <string name="Private_Chat">Private Chat</string>
     <string name="Bot">Bot</string>
@@ -95,6 +99,9 @@
     <string name="save_to_media_library">Save to Media Library</string>
     <string name="saved_to_media_library">Saved to Media Library</string>
     <string name="no_app_to_open">No app available to open this file</string>
+    <string name="install_apk">Install</string>
+    <string name="install_permission_required">Permission required to install apps. Please allow it in settings.</string>
+    <string name="install_failed">Failed to install the app</string>
     <string name="video_note">Video note</string>
     <string name="video_note_viewed">Viewed</string>
     <string name="video_note_unviewed">Not viewed yet</string>
@@ -459,4 +466,5 @@
     <string name="Proxy_invalid_server">Please enter a server address</string>
     <string name="Proxy_invalid_port">Please enter a valid port (1–65535)</string>
     <string name="Proxy_invalid_secret">Please enter the MTProto secret</string>
+    <string name="Phone_number_input_hint">Enter country code followed by your phone number (e.g., 1 555 123 4567)</string>
 </resources>

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,17 +48,29 @@ import com.tgwrist.app.utils.setTdlibParameters
 import org.drinkless.tdlib.TdApi
 import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * 规范化手机号。
+ * 不论用户是否输入了加号、是否输入了空格等非数字字符，
+ * 或是输入了 ➕ 这类表情加号，最终都统一为 "+" 加纯数字的格式。
+ * 例如输入 "➕1 775 442 2228"、"1 775-442-2228" 等都会得到 "+17754422228"。
+ */
+private fun normalizePhoneNumber(input: String): String {
+    val digits = input.filter { it.isDigit() }
+    return "+$digits"
+}
+
 @Composable
 internal fun Page1(
     errorCallback: (String) -> Unit,
-    onTestMode: () -> Unit
+    onTestMode: () -> Unit,
+    onQrLogin: () -> Unit
 ) {
     //val context = LocalContext.current
     val listState = rememberTransformingLazyColumnState()
     val overscroll = rememberOverscrollEffect()
     val transformationSpec = rememberTransformationSpec()
     val navController = LocalGlobalAppState.current.navController
-    var phoneNumber by remember { mutableStateOf("+") }
+    var phoneNumber by remember { mutableStateOf("") }
     var sendingRequest by remember { mutableStateOf(false) }
     var showNetworkOption by remember { mutableStateOf(false) }
 
@@ -88,11 +101,12 @@ internal fun Page1(
                         // 谷歌测试模式
                         onTestMode.invoke()
                     } else {
-                        TgClient.send(TdApi.SetAuthenticationPhoneNumber(phoneNumber, null)) {
+                        val normalizedPhoneNumber = normalizePhoneNumber(phoneNumber)
+                        TgClient.send(TdApi.SetAuthenticationPhoneNumber(normalizedPhoneNumber, null)) {
                             if (it is TdApi.Error) {
                                 if (it.message == "Initialization parameters are needed: call setTdlibParameters first") {
                                     TGWrist.context.setTdlibParameters(null)
-                                    TgClient.send(TdApi.SetAuthenticationPhoneNumber(phoneNumber, null)) { it1 ->
+                                    TgClient.send(TdApi.SetAuthenticationPhoneNumber(normalizedPhoneNumber, null)) { it1 ->
                                         if (it1 is TdApi.Error) {
                                             val errorText = "$errorRequestText\ncode:${it1.code}\n${it1.message}"
                                             errorCallback.invoke(errorText)
@@ -149,6 +163,16 @@ internal fun Page1(
                     )
                 }
             }
+            // 手机号输入提示
+            item {
+                Text(
+                    text = stringResource(R.string.Phone_number_input_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    color = Color.Gray,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             item {
                 // 手机号输入框
                 TextInputChip(
@@ -163,6 +187,41 @@ internal fun Page1(
                         .transformedHeight(this, transformationSpec)
                         .padding(5.dp)
                 )
+            }
+            // 二维码登录入口
+            if (!sendingRequest) {
+                item {
+                    FilledTonalButton(
+                        onClick = {
+                            onQrLogin()
+                            TgClient.send(TdApi.RequestQrCodeAuthentication(LongArray(0))) {
+                                if (it is TdApi.Error) {
+                                    if (it.message == "Initialization parameters are needed: call setTdlibParameters first") {
+                                        TGWrist.context.setTdlibParameters(null)
+                                        TgClient.send(TdApi.RequestQrCodeAuthentication(LongArray(0))) { it1 ->
+                                            if (it1 is TdApi.Error) {
+                                                errorCallback.invoke("$errorRequestText\ncode:${it1.code}\n${it1.message}")
+                                                Log.e("TDLib", it1.toString())
+                                            }
+                                        }
+                                    } else {
+                                        errorCallback.invoke("$errorRequestText\ncode:${it.code}\n${it.message}")
+                                        Log.e("TDLib", it.toString())
+                                    }
+                                }
+                            }
+                        },
+                        transformation = SurfaceTransformation(transformationSpec),
+                        icon = {
+                            Icon(Icons.Rounded.QrCode2, contentDescription = null)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                    ) {
+                        Text(stringResource(R.string.Login_with_QR))
+                    }
+                }
             }
             if (sendingRequest) {
                 item {

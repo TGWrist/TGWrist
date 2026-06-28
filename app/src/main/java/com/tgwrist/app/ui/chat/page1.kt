@@ -438,9 +438,9 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                         onClick = {
                             // 打开转发消息的 MessageInfo
                             val key = System.currentTimeMillis()
-                            appState.sharedMessageInfo[SharedMessageInfoKey(chatId, key)] =
+                            appState.sharedMessageInfo[SharedMessageInfoKey(forwardMsgs?.chatId ?: chatId, key)] =
                                 SharedMessageInfoData(forwardMsgs?.messageIds?.sorted() ?: listOf())
-                            navController.navigate(Destinations.messageInfo(chatId, key, false))
+                            navController.navigate(Destinations.messageInfo(forwardMsgs?.chatId ?: chatId, key, false))
                         },
                         appImage = {
                             Icon(
@@ -569,9 +569,9 @@ fun Page1(chatId: Long, chatObject: TdApi.Chat?, mediaChose: SnapshotStateList<M
                                     if (isSameChat && replyMessage != null) {
                                         // 打开回复消息的 MessageInfo
                                         val key = System.currentTimeMillis()
-                                        appState.sharedMessageInfo[SharedMessageInfoKey(chatId, key)] =
+                                        appState.sharedMessageInfo[SharedMessageInfoKey(replyMessage?.chatId ?: chatId, key)] =
                                             SharedMessageInfoData(listOf(replyMessage!!.id))
-                                        navController.navigate(Destinations.messageInfo(chatId, key))
+                                        navController.navigate(Destinations.messageInfo(replyMessage?.chatId ?: chatId, key))
                                     }
                                 },
                                 onLongClick = {

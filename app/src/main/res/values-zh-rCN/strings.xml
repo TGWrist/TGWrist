@@ -1,12 +1,16 @@
 <resources>
     
-    <string name="Phone_Number">电话号码 (+区号)</string>
+    <string name="Phone_Number">电话号码</string>
     <string name="Login">登录</string>
     <string name="Login_code">登录验证码</string>
     <string name="Enter_login_code">输入在其他设备收到的验证码</string>
     <string name="Password">密码</string>
     <string name="Enter_password">输入密码</string>
     <string name="Login_successful">登录成功</string>
+    <string name="Login_with_QR">使用二维码登录</string>
+    <string name="QR_login">二维码登录</string>
+    <string name="QR_login_tip">在另一台已登录的设备上打开 Telegram，进入 设置 → 设备 → 关联桌面设备，扫描此二维码。</string>
+    <string name="QR_login_loading">正在生成二维码…</string>
     <string name="Info">信息</string>
     <string name="Request_error">请求错误</string>
     <string name="Chats">聊天</string>
@@ -60,7 +64,7 @@
     <string name="Confirm">确认</string>
     <string name="Confirm_delete_account">是否确实要删除帐户%s</string>
     <string name="Logout">退出登录</string>
-    <string name="Invalid_phone_number">输入的手机号码必须是带有区号的手机号码，且不能有空格，例如 +10000000000</string>
+    <string name="Invalid_phone_number">手机号码必须包含国家/地区区号。区号必须填写在电话号码之前（例如：852 1234 5678）</string>
     <string name="Push_notification">推送通知</string>
     <string name="Private_Chat">私人聊天</string>
     <string name="Bot">机器人</string>
@@ -95,6 +99,9 @@
     <string name="save_to_media_library">保存到媒体库</string>
     <string name="saved_to_media_library">已保存到媒体库</string>
     <string name="no_app_to_open">没有可用的应用打开此文件</string>
+    <string name="install_apk">安装</string>
+    <string name="install_permission_required">需要安装应用权限，请在设置中允许</string>
+    <string name="install_failed">安装应用失败</string>
     <string name="video_note">视频留言</string>
     <string name="video_note_viewed">已查看</string>
     <string name="video_note_unviewed">尚未查看</string>
@@ -459,4 +466,5 @@
     <string name="Proxy_invalid_server">请输入服务器地址</string>
     <string name="Proxy_invalid_port">请输入有效端口（1–65535）</string>
     <string name="Proxy_invalid_secret">请输入 MTProto 密钥</string>
+    <string name="Phone_number_input_hint">输入您的国家区号+电话号码 (例如 852 1234 5678)</string>
 </resources>

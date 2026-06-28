@@ -21,8 +21,8 @@ android {
         applicationId = "com.tgwrist.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 31
-        versionName = "3.9.3"
+        versionCode = 33
+        versionName = "4.0.0"
     }
 
     flavorDimensions += "abi"
@@ -149,6 +149,7 @@ dependencies {
     implementation(libs.lottie.compose)
     implementation(libs.relinker)
     implementation(libs.checker.qual)
+    implementation(libs.zxing.core)
     androidTestImplementation(libs.ui.test.junit4)
     debugImplementation(libs.ui.tooling)
     debugImplementation(libs.ui.test.manifest)

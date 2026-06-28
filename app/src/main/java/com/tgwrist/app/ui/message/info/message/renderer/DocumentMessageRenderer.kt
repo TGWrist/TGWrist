@@ -5,7 +5,10 @@ import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.InstallMobile
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -127,11 +132,19 @@ fun DocumentMessageRenderer(
     val caption = remember(content.caption) { content.caption }
     var translateCaption by remember { mutableStateOf<TdApi.FormattedText?>(null) }
 
+    // 是否为 APK 文件
+    val isApk = remember(fileName, mimeType) {
+        fileName.endsWith(".apk", ignoreCase = true) ||
+            mimeType.equals("application/vnd.android.package-archive", ignoreCase = true)
+    }
+
     // 字符串变量
     val copiedClipboard = stringResource(R.string.Copied_clipboard)
     val strFileSavedToPath = stringResource(R.string.file_saved_to_path)
     val strFileSaveFailed = stringResource(R.string.file_save_failed)
     val strNoAppToOpen = stringResource(R.string.no_app_to_open)
+    val strInstallPermissionRequired = stringResource(R.string.install_permission_required)
+    val strInstallFailed = stringResource(R.string.install_failed)
 
     // 文件状态
     var fileId by remember { mutableIntStateOf(document.document.id) }
@@ -342,6 +355,57 @@ fun DocumentMessageRenderer(
         } catch (_: Exception) {
             Toast.makeText(context, strNoAppToOpen, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    // ========== 执行 APK 安装 ==========
+    fun performInstall() {
+        if (fileLocalPath.isBlank()) return
+        try {
+            val file = File(fileLocalPath)
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            Toast.makeText(context, strInstallFailed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 安装未知来源应用授权的返回处理
+    val installPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (context.packageManager.canRequestPackageInstalls()) {
+            performInstall()
+        } else {
+            Toast.makeText(context, strInstallPermissionRequired, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ========== 安装 APK（先检查权限）==========
+    fun installApk() {
+        if (fileLocalPath.isBlank()) return
+        if (!context.packageManager.canRequestPackageInstalls()) {
+            // 跳转到“安装未知应用”授权页面
+            try {
+                val settingsIntent = Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    "package:${context.packageName}".toUri()
+                )
+                installPermissionLauncher.launch(settingsIntent)
+            } catch (_: Exception) {
+                Toast.makeText(context, strInstallPermissionRequired, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        performInstall()
     }
 
     // ========== UI ==========
@@ -585,8 +649,33 @@ fun DocumentMessageRenderer(
                 }
             }
 
+            // ========== 安装 APK 按钮 ==========
+            if (isApk && fileLocalPath.isNotBlank() && !isDownloading) {
+                item(key = "install_button") {
+                    FilledTonalButton(
+                        onClick = { installApk() },
+                        label = {
+                            Text(
+                                text = stringResource(R.string.install_apk),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Rounded.InstallMobile,
+                                contentDescription = "Install"
+                            )
+                        },
+                        transformation = SurfaceTransformation(transformationSpec),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .transformedHeight(this, transformationSpec)
+                    )
+                }
+            }
+
             // ========== 用外部应用打开文件 ==========
-            if (fileLocalPath.isNotBlank() && !isDownloading) {
+            if (fileLocalPath.isNotBlank() && !isDownloading && !isApk) {
                 item(key = "open_button") {
                     FilledTonalButton(
                         onClick = { openFile() },

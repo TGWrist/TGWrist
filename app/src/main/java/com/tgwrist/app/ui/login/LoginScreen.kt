@@ -37,6 +37,7 @@ import com.tgwrist.app.runtime.TdLibInitManage.isPageOnLoginAndNeedReInitTG
 import com.tgwrist.app.runtime.TdLibInitManage.needReInitOnDispose
 import com.tgwrist.app.runtime.TgClient
 import com.tgwrist.app.runtime.UserManager
+import com.tgwrist.app.ui.StatusTimeText
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 
@@ -48,11 +49,13 @@ fun SplashLoginScreen() {
     val userInfo = UserManager.getActiveUser()
     val pagerState = rememberPagerState(initialPage = if (userInfo == null) 0 else 1) { 5 }
     var passwordHint by remember { mutableStateOf("") }
+    var qrLink by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
     var showDialogText by remember { mutableStateOf("") }
     val mainScreenNeedHandleTdlibLogin by TdLibInitManage.isPageOnLogin.collectAsState()
     var onTestMode by remember { mutableStateOf(false) }
     var isPassPage0 by remember { mutableStateOf(false) }
+    var isQrLoginMode by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         TdLibInitManage.isPageOnLogin.value = true
@@ -78,6 +81,7 @@ fun SplashLoginScreen() {
 
                     is TdApi.AuthorizationStateWaitCode -> {
                         if (!onTestMode) {
+                            isQrLoginMode = false
                             coroutineScope.launch {
                                 pagerState.animateScrollToPage(2)
                             }
@@ -91,6 +95,17 @@ fun SplashLoginScreen() {
                         }
                     }
 
+                    is TdApi.AuthorizationStateWaitOtherDeviceConfirmation -> {
+                        // 二维码登录：link 会频繁刷新，每次更新都要重绘二维码
+                        qrLink = state.link
+                        isQrLoginMode = true
+                        coroutineScope.launch {
+                            if (pagerState.currentPage != 2) {
+                                pagerState.animateScrollToPage(2)
+                            }
+                        }
+                    }
+
                     is TdApi.AuthorizationStateReady -> {
                         coroutineScope.launch {
                             pagerState.animateScrollToPage(4)
@@ -101,7 +116,7 @@ fun SplashLoginScreen() {
         }
     }
 
-    AppScaffold {
+    AppScaffold(timeText = { StatusTimeText() }) {
         AlertDialog(
             visible = showDialog,
             onDismissRequest = { showDialog = false },
@@ -152,22 +167,32 @@ fun SplashLoginScreen() {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(3)
                                 }
+                            },
+                            onQrLogin = {
+                                isQrLoginMode = true
                             }
                         )
                     }
                 }
                 2 -> {
                     AnimatedPage(pageIndex = page, pagerState = pagerState) {
-                        Page2(errorCallback = {
-                            showDialogText = it
-                            showDialog = true
-                        },onBack = {
-                            coroutineScope.launch {
-                                pagerState.animateScrollToPage(1)
+                        Page2(
+                            isQrMode = isQrLoginMode,
+                            qrLink = qrLink,
+                            errorCallback = {
+                                showDialogText = it
+                                showDialog = true
+                            },
+                            onBack = {
+                                isQrLoginMode = false
+                                qrLink = ""
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(1)
+                                }
+                                TgClient.send(TdApi.LogOut())
+                                isPageOnLoginAndNeedReInitTG.value = true
                             }
-                            TgClient.send(TdApi.LogOut())
-                            isPageOnLoginAndNeedReInitTG.value = true
-                        })
+                        )
                     }
                 }
                 3 -> {
@@ -204,6 +229,7 @@ fun SplashLoginScreen() {
                         }
                     }
                 }
+
             }
         }
     }

@@ -14,13 +14,16 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.curvedComposable
 import androidx.wear.compose.material3.TimeText
 import androidx.wear.compose.material3.timeTextCurvedText
+import com.tgwrist.app.runtime.CALL_STATE_NONE
 import com.tgwrist.app.runtime.Config
 import com.tgwrist.app.runtime.Config.connectionState
+import com.tgwrist.app.runtime.TgCallManager
 
 @Composable
 fun StatusTimeText(text: String? = null) {
     //val style = TimeTextDefaults.timeTextStyle()
     val connectionState by connectionState.collectAsState()
+    val isCalling by TgCallManager.callState.collectAsState()
     TimeText {time ->
         timeTextCurvedText(text ?: time)
         //timeTextSeparator(style)
@@ -30,7 +33,7 @@ fun StatusTimeText(text: String? = null) {
             Config.ConnectionState.ConnectingToProxy -> Color(0xFFFD4C4C)
             Config.ConnectionState.Updating -> Color(0xFF568AFD)
             Config.ConnectionState.WaitingForNetwork -> Color(0xFFFD4C4C)
-            else -> Color(0xFFFD4C4C)
+            else -> if (isCalling != CALL_STATE_NONE) Color(0xFF4CAF50) else Color(0xFFFD4C4C)
         }
         // 绘制圆点
         color?.let {

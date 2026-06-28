@@ -1,14 +1,14 @@
 [versions]
 accompanistDrawablepainter = "0.37.3"
 agp = "9.2.1"
-checkerQual = "4.1.0"
-firebaseBom = "34.13.0"
+checkerQual = "4.2.0"
+firebaseBom = "34.14.1"
 graphicsShapes = "1.1.0"
 iconsMaterialIcons = "2.2.1"
 kotlinxSerializationJson = "1.11.0"
 ongoing = "1.1.0"
 playServicesWearable = "20.0.1"
-kotlin = "2.3.21"
+kotlin = "2.4.0"
 composeBom = "2026.05.01"
 composeMaterial3 = "1.6.2"
 relinker = "1.4.5"
@@ -33,6 +33,7 @@ workRuntimeKtx = "2.11.2"
 zoomimageComposeCoil2 = "1.4.0"
 uiText = "1.11.2"
 lottieCompose = "6.7.1"
+zxingCore = "3.5.3"
 
 [libraries]
 accompanist-drawablepainter = { module = "com.google.accompanist:accompanist-drawablepainter", version.ref = "accompanistDrawablepainter" }
@@ -88,6 +89,7 @@ androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx"
 zoomimage-compose-coil2 = { module = "io.github.panpf.zoomimage:zoomimage-compose-coil2", version.ref = "zoomimageComposeCoil2" }
 androidx-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
 lottie-compose = { module = "com.airbnb.android:lottie-compose", version.ref = "lottieCompose" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
