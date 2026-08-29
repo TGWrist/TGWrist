@@ -21,8 +21,8 @@ android {
         applicationId = "com.tgwrist.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 33
-        versionName = "4.0.0"
+        versionCode = 34
+        versionName = "4.0.1"
     }
 
     flavorDimensions += "abi"
@@ -43,6 +43,18 @@ android {
             dimension = "abi"
             ndk {
                 abiFilters += listOf("arm64-v8a")
+            }
+        }
+        create("x86") {
+            dimension = "abi"
+            ndk {
+                abiFilters += listOf("x86")
+            }
+        }
+        create("x86_64") {
+            dimension = "abi"
+            ndk {
+                abiFilters += listOf("x86_64")
             }
         }
     }

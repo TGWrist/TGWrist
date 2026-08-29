@@ -22,6 +22,7 @@ class TGWrist : Application(), LifecycleObserver {
         // application 变量用于保存 Application 实例，提供全局访问
         private lateinit var application: Application
         fun getApplication(): Application = application
+
         // 使用 late init 延迟初始化，确保不为空
         @SuppressLint("StaticFieldLeak")
         lateinit var context: Context
