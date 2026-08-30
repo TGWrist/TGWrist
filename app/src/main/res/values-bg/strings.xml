@@ -230,6 +230,7 @@
     <string name="voice_recognized_text">Разпознаване на реч</string>
     <string name="download_voice">Изтегляне на гласово съобщение</string>
     <string name="play_voice">Възпроизвеждане на глас</string>
+    <string name="pause">Пауза</string>
     <string name="pause_voice">Пауза</string>
     <string name="save_voice_to_music">Запазване в Музика</string>
     <string name="voice_play_failed">Неуспешно възпроизвеждане на гласовото съобщение</string>
@@ -505,135 +506,9 @@
     <string name="media_picker_permission_required">Изисква се разрешение за съхранение, за да разглеждате медия</string>
     <string name="media_picker_permission_denied">Отказано разрешение, няма достъп до галерията</string>
 
-    <!-- Stickers -->
     <string name="sticker_content_description">Стикер</string>
     <string name="sticker_premium_label">Премиум стикер</string>
 
-    <!-- Request Error -->
     <string name="Request_error">Грешка при заявката</string>
 
-    <!-- Generic / Library Strings (Included in user input, kept for completeness) -->
-    <string name="abc_action_bar_up_description">Нагоре</string>
-    <string name="abc_action_mode_done">Готово</string>
-    <string name="abc_capital_off">ИЗКЛ.</string>
-    <string name="abc_capital_on">ВКЛ.</string>
-    <string name="abc_menu_alt_shortcut_label">Alt+</string>
-    <string name="abc_menu_ctrl_shortcut_label">Ctrl+</string>
-    <string name="abc_menu_delete_shortcut_label">delete</string>
-    <string name="abc_menu_enter_shortcut_label">enter</string>
-    <string name="abc_menu_function_shortcut_label">Function+</string>
-    <string name="abc_menu_meta_shortcut_label">Meta+</string>
-    <string name="abc_menu_shift_shortcut_label">Shift+</string>
-    <string name="abc_menu_space_shortcut_label">интервал</string>
-    <string name="abc_menu_sym_shortcut_label">Sym+</string>
-    <string name="abc_prepend_shortcut_label">Menu+</string>
-    <string name="abc_search_hint">Търсене…</string>
-    <string name="abc_searchview_description_clear">Изчистване на заявката</string>
-    <string name="abc_searchview_description_search">Търсене</string>
-    <string name="abc_searchview_description_submit">Изпращане на заявката</string>
-    <string name="abc_searchview_description_voice">Гласово търсене</string>
-    <string name="abc_toolbar_collapse_description">Свиване</string>
-    
-    <string name="androidx_compose_foundation_autofill">Автоматично попълване</string>
-    <string name="androidx_startup">androidx.startup</string>
-    
-    <string name="com.google.firebase.crashlytics.mapping_file_id">4cafaa7a927848a1bed5e77fc366c4d9</string>
-    <string name="com.google.firebase.crashlytics.version_control_info">repositories {
-  system: GIT
-  local_root_path: "$PROJECT_DIR"
-  revision: "836691181e399cb351a7e5402b36e0852900ada2"
-}
-</string>
-    
-    <string name="common_google_play_services_enable_button">Активиране</string>
-    <string name="common_google_play_services_enable_text">%1$s няма да работи, освен ако не активирате услугите за Google Play.</string>
-    <string name="common_google_play_services_enable_title">Активиране на услугите за Google Play</string>
-    <string name="common_google_play_services_install_button">Инсталиране</string>
-    <string name="common_google_play_services_install_text">%1$s няма да работи без услугите за Google Play, които липсват на устройството ви.</string>
-    <string name="common_google_play_services_install_title">Инсталиране на услуги за Google Play</string>
-    <string name="common_google_play_services_notification_channel_name">Наличност на услугите за Google Play</string>
-    <string name="common_google_play_services_notification_ticker">Грешка в услугите за Google Play</string>
-    <string name="common_google_play_services_unknown_issue">%1$s има проблем с услугите за Google Play. Моля, опитайте отново.</string>
-    <string name="common_google_play_services_unsupported_text">%1$s няма да работи без услугите за Google Play, които не се поддържат от устройството ви.</string>
-    <string name="common_google_play_services_update_button">Актуализиране</string>
-    <string name="common_google_play_services_update_text">%1$s няма да работи, освен ако не актуализирате услугите за Google Play.</string>
-    <string name="common_google_play_services_update_title">Актуализиране на услугите за Google Play</string>
-    <string name="common_google_play_services_updating_text">%1$s няма да работи без услугите за Google Play, които в момента се актуализират.</string>
-    <string name="common_google_play_services_wear_update_text">Необходима е нова версия на услугите за Google Play. Тя ще се актуализира автоматично скоро.</string>
-    <string name="common_open_on_phone">Отваряне на телефона</string>
-    <string name="common_signin_button_text">Вход</string>
-    <string name="common_signin_button_text_long">Вход с Google</string>
-    
-    <string name="default_popup_window_title">Изскачащ прозорец</string>
-    
-    <string name="exo_controls_cc_disabled_description">Активиране на субтитрите</string>
-    <string name="exo_controls_cc_enabled_description">Деактивиране на субтитрите</string>
-    <string name="exo_controls_fastforward_description">Превъртане напред</string>
-    <string name="exo_controls_fullscreen_enter_description">Цял екран</string>
-    <string name="exo_controls_fullscreen_exit_description">Изход от цял екран</string>
-    <string name="exo_controls_hide">Скриване на контролите на плейъра</string>
-    <string name="exo_controls_next_description">Следващ</string>
-    <string name="exo_controls_overflow_hide_description">Скриване на допълнителните настройки</string>
-    <string name="exo_controls_overflow_show_description">Показване на допълнителни настройки</string>
-    <string name="exo_controls_pause_description">Пауза</string>
-    <string name="exo_controls_play_description">Възпроизвеждане</string>
-    <string name="exo_controls_playback_speed">Скорост</string>
-    <string name="exo_controls_previous_description">Предишен</string>
-    <string name="exo_controls_repeat_all_description">Текущ режим: Повтаряне на всички. Превключване на режима.</string>
-    <string name="exo_controls_repeat_off_description">Текущ режим: Без повтаряне. Превключване на режима.</string>
-    <string name="exo_controls_repeat_one_description">Текущ режим: Повтаряне на едно. Превключване на режима.</string>
-    <string name="exo_controls_rewind_description">Превъртане назад</string>
-    <string name="exo_controls_settings_description">Настройки</string>
-    <string name="exo_controls_show">Показване на контролите на плейъра</string>
-    <string name="exo_controls_shuffle_off_description">Активиране на разбъркването</string>
-    <string name="exo_controls_shuffle_on_description">Деактивиране на разбъркването</string>
-    <string name="exo_controls_time_placeholder">00:00:00</string>
-    <string name="exo_controls_vr_description">VR режим</string>
-    <string name="exo_item_list">%1$s, %2$s</string>
-    <string name="exo_track_bitrate">%1$.2f Mbps</string>
-    <string name="exo_track_mono">Моно</string>
-    <string name="exo_track_resolution">%1$d × %2$d</string>
-    <string name="exo_track_role_alternate">Алтернативен</string>
-    <string name="exo_track_role_closed_captions">CC</string>
-    <string name="exo_track_role_commentary">Коментар</string>
-    <string name="exo_track_role_supplementary">Допълнителен</string>
-    <string name="exo_track_selection_auto">Автоматично</string>
-    <string name="exo_track_selection_none">Няма</string>
-    <string name="exo_track_selection_title_audio">Аудио</string>
-    <string name="exo_track_stereo">Стерео</string>
-    <string name="exo_track_surround">Съраунд звук</string>
-    <string name="exo_track_surround_5_point_1">5.1 съраунд звук</string>
-    <string name="exo_track_surround_7_point_1">7.1 съраунд звук</string>
-    <string name="exo_track_unknown">Неизвестно</string>
-    <string name="exo_track_unknown_name">Неизвестно (%1$s)</string>
-    
-    <string name="gcm_defaultSenderId">886140833567</string>
-    <string name="google_api_key">AIzaSyAIZ1s_MypDiaYmSRQkwIg3hhT8l5QpE-Y</string>
-    <string name="google_app_id">1:886140833567:android:7f8af42f59702b069a2a2a</string>
-    <string name="google_storage_bucket">tg-wrist.firebasestorage.app</string>
-    
-    <string name="in_progress">В ход</string>
-    <string name="indeterminate">Частично избрано</string>
-    <string name="not_selected">Не е избрано</string>
-    <string name="not_set">Не е зададено</string>
-    <string name="selected">Избрано</string>
-    <string name="state_empty">Празно</string>
-    <string name="state_off">Изкл.</string>
-    <string name="state_on">Вкл.</string>
-    <string name="switch_role">Превключване</string>
-    <string name="tab">Раздел</string>
-    <string name="template_percent">%1$d процента.</string>
-    
-    <string name="time_difference_now">Сега</string>
-    <string name="time_difference_short_days_and_hours">%1$s %2$s</string>
-    <string name="time_difference_short_hours_and_minutes">%1$s %2$s</string>
-    
-    <string name="wear_m3c_alert_dialog_content_description_confirm_button">Потвърждаване</string>
-    <string name="wear_m3c_alert_dialog_content_description_dismiss_button">Отхвърляне</string>
-    
-    <string name="ws_action_drawer_content_description">Панел с действия</string>
-    <string name="ws_navigation_drawer_content_description">Навигационен панел</string>
-    
-    <string name="project_id">tg-wrist</string>
-    <string name="pause">Пауза</string>
 </resources>
