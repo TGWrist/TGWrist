@@ -16,6 +16,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -128,6 +129,10 @@
             android:foregroundServiceType="microphone"
             android:exported="false" />
 
+        <service
+            android:name=".notification.PushWakeService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
         <service
             android:name=".IncomingCallNotificationService"
             android:foregroundServiceType="shortService"

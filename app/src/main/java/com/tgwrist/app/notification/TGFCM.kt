@@ -52,6 +52,17 @@ class TGFCM : FirebaseMessagingService() {
             if (remoteMessage.data.isNotEmpty()) {
                 //println("Message data payload: ${remoteMessage.data}")
                 Log.d(TAG, "Message data payload: ${remoteMessage.data}")
+                val fcmJson = JSONObject(remoteMessage.data).toString()
+
+                // 高优先级推送（来电 / 消息）：优先用前台服务 + WakeLock 立即处理，
+                // 绕过 WorkManager 在 Doze 下的推迟。启动被拒时退回 WorkManager。
+                if (originalPriority == RemoteMessage.PRIORITY_HIGH &&
+                    PushWakeService.tryStart(applicationContext, fcmJson)
+                ) {
+                    Log.d(TAG, "High priority message handed to PushWakeService")
+                    return
+                }
+
                 val workRequest =
                     if (originalPriority == RemoteMessage.PRIORITY_HIGH)
                         OneTimeWorkRequestBuilder<NotificationBackgroundWorker>()
